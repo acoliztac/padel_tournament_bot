@@ -3,6 +3,7 @@ import uuid
 import random
 import io
 import csv
+from datetime import datetime
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ForceReply
 from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQueryHandler, MessageHandler, filters
@@ -81,7 +82,6 @@ chat_tournaments = {}
 pending_scores = {}
 pending_new_player = {}
 pending_player_selection = {}
-pending_tournament_name = {}
 
 # -------------------- Handlers --------------------
 
@@ -228,11 +228,22 @@ async def handle_callback(update, context):
             await context.bot.send_message(chat_id, "Select at least 4 players!")
             return
         
-        # Store selected players for later
-        pending_tournament_name[chat_id] = selected
-        
-        # Delete player selection message
+        # Save players_msg_id before overwriting chat_tournaments
         players_msg_id = chat_tournaments.get(chat_id, {}).get('players_msg_id')
+        
+        # Generate tournament name
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        player_count = len(selected)
+        name = f"{date_str}_Mexicano_{player_count}players"
+        
+        # Create tournament
+        t = Tournament(name)
+        for player_name in selected:
+            t.add_player(Player(player_name))
+        tournaments[t.id] = t
+        chat_tournaments[chat_id] = {'t_id': t.id}
+
+        # Delete player selection message
         if players_msg_id:
             try:
                 await context.bot.delete_message(chat_id, players_msg_id)
@@ -242,7 +253,9 @@ async def handle_callback(update, context):
         if chat_id in pending_player_selection:
             del pending_player_selection[chat_id]
         
-        await context.bot.send_message(chat_id, "Enter tournament name:", reply_markup=ForceReply())
+        await context.bot.send_message(chat_id, f"Tournament '{name}' created!\nPlayers:\n{"\n".join(f"- {p}" for p in selected)}")
+        await show_tournament_mode(chat_id, context)
+        await show_points_selection(chat_id, context)
         return
 
     if data == "start_new_tournament":
@@ -474,22 +487,6 @@ async def handle_message(update, context):
     chat_id = update.effective_chat.id
     text = update.message.text.strip()
 
-    if update.message.reply_to_message and "Enter tournament name" in update.message.reply_to_message.text:
-        if chat_id in pending_tournament_name:
-            selected = pending_tournament_name[chat_id]
-            t = Tournament(text)
-            for name in selected:
-                t.add_player(Player(name))
-            tournaments[t.id] = t
-            chat_tournaments[chat_id] = {'t_id': t.id}
-            
-            del pending_tournament_name[chat_id]
-            
-            await update.message.reply_text(f"Tournament '{text}' created!\nPlayers:\n{"\n".join(f"- {p}" for p in selected)}")
-            await show_tournament_mode(chat_id, context)
-            
-            await show_points_selection(chat_id, context)
-        return
 
     if chat_id in pending_new_player and pending_new_player[chat_id]:
         if text and text not in players_pool:
