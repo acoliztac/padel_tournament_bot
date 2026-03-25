@@ -199,13 +199,13 @@ async def next_pair(chat_id, context):
     equal_icon = "⚖️" if equal_games else ""
 
     msg_text = f"{msg_prefix} {equal_icon}\n" \
-               f"{pair.team1[0].name} & {pair.team1[1].name}\nvs\n" \
-               f"{pair.team2[0].name} & {pair.team2[1].name}\n\n" \
+               f"🔹 {pair.team1[0].name} & {pair.team1[1].name}\n\tvs\t\n" \
+               f"🔸 {pair.team2[0].name} & {pair.team2[1].name}\n\n" \
                f"Select team and enter its score:"
 
     keyboard = [[
-        InlineKeyboardButton("Team 1", callback_data="score_team1"),
-        InlineKeyboardButton("Team 2", callback_data="score_team2")
+        InlineKeyboardButton("🔹 Team 1", callback_data="score_team1"),
+        InlineKeyboardButton("🔸 Team 2", callback_data="score_team2")
     ]]
     if t.round > 1 and not pending_scores[chat_id].get('edit'):
         keyboard.append([InlineKeyboardButton("Edit Last Round", callback_data="edit_last_round")])
@@ -485,7 +485,7 @@ async def handle_message(update, context):
             
             del pending_tournament_name[chat_id]
             
-            await update.message.reply_text(f"Tournament '{text}' created!\nPlayers: {', '.join(selected)}")
+            await update.message.reply_text(f"Tournament '{text}' created!\nPlayers:\n{"\n".join(f"- {p}" for p in selected)}")
             await show_tournament_mode(chat_id, context)
             
             await show_points_selection(chat_id, context)
@@ -558,7 +558,14 @@ async def finalize_tournament(chat_id, context):
     max_name_len = max(len(p.name) for p in t.players)
     lines = []
     for i, p in enumerate(t.players, 1):
-        lines.append(f"{i}. {p.name:<{max_name_len}} | Games: {p.games_played:<2} | W: {p.wins:<2} | D: {p.draws:<2} | L: {p.losses:<2} | Pts: {p.points:<3}")
+        medal = "▫️"
+        if i == 1:
+            medal = "🥇"
+        elif i == 2:
+            medal = "🥈"
+        elif i == 3:
+            medal = "🥉"
+        lines.append(f"{medal} {i}. {p.name:<{max_name_len}} | Games: {p.games_played:<2} | W: {p.wins:<2} | D: {p.draws:<2} | L: {p.losses:<2} | Pts: {p.points:<3}")
     msg = "🏆 Tournament Finished!\n📊 Final Standings:\n<pre>\n" + "\n".join(lines) + "\n</pre>"
     await context.bot.send_message(chat_id, msg, parse_mode="HTML")
 
