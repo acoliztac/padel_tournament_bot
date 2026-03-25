@@ -544,6 +544,13 @@ async def finalize_tournament(chat_id, context):
         except:
             pass
 
+    # Delete points selection message
+    if chat_tournaments[chat_id].get('points_msg_id'):
+        try:
+            await context.bot.delete_message(chat_id, chat_tournaments[chat_id]['points_msg_id'])
+        except:
+            pass
+
     # Delete standings message
     if t.stats_msg_id:
         try:
