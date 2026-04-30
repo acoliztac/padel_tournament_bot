@@ -3,9 +3,11 @@ import uuid
 import random
 import io
 import csv
+import asyncio
 from datetime import datetime
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ForceReply
+from telegram.error import RetryAfter
 from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQueryHandler, MessageHandler, filters
 import logging
 
@@ -83,6 +85,7 @@ chat_tournaments = {}
 pending_scores = {}
 pending_new_player = {}
 pending_player_selection = {}
+pending_edit_selection = {}
 
 # -------------------- Handlers --------------------
 
@@ -169,51 +172,32 @@ async def show_points_selection(chat_id, context):
     sent = await context.bot.send_message(chat_id, "Select points per round:", reply_markup=InlineKeyboardMarkup(keyboard))
     chat_tournaments[chat_id]['points_msg_id'] = sent.message_id
 
-async def show_score_buttons(chat_id, context, selected_team):
+async def show_score_buttons(chat_id, context, winner_team):
     t = tournaments[chat_tournaments[chat_id]['t_id']]
-    buttons = [InlineKeyboardButton(str(i), callback_data=f"set_score_{i}") for i in range(1, t.round_points + 1)]
+    half = t.round_points // 2
+    buttons = [InlineKeyboardButton(str(i), callback_data=f"set_score_{i}") for i in range(half + 1, t.round_points + 1)]
     keyboard = [buttons[i:i+4] for i in range(0, len(buttons), 4)]  # 4 buttons per row
-    msg_text = f"Selected team:\n{' & '.join(p.name for p in selected_team)}\nSelect score:"
-    sent = await context.bot.send_message(chat_id, msg_text, reply_markup=InlineKeyboardMarkup(keyboard))
-    pending_scores[chat_id]['score_msg_id'] = sent.message_id
+    msg_text = f"Winning team:\n{' & '.join(p.name for p in winner_team)}\nSelect score:"
+    try:
+        sent = await context.bot.send_message(chat_id, msg_text, reply_markup=InlineKeyboardMarkup(keyboard))
+        pending_scores[chat_id]['score_msg_id'] = sent.message_id
+    except RetryAfter as e:
+        await asyncio.sleep(e.retry_after)
+        sent = await context.bot.send_message(chat_id, msg_text, reply_markup=InlineKeyboardMarkup(keyboard))
+        pending_scores[chat_id]['score_msg_id'] = sent.message_id
 
 # -------------------- Core --------------------
 
 async def next_pair(chat_id, context):
     t = tournaments[chat_tournaments[chat_id]['t_id']]
     
-    if chat_id in pending_scores and pending_scores[chat_id].get('edit'):
-        pair = pending_scores[chat_id]['pair']
-        round_num = t.round - 1  # Since editing last round
-        msg_prefix = f"Edit Round {round_num}"
-    else:
-        pair = t.select_next_pair()
-        if not pair:
-            await context.bot.send_message(chat_id, "Waiting for 4 players...")
-            return
-        pending_scores[chat_id] = {'pair': pair}
-        round_num = t.round
-        msg_prefix = f"🏓 Round {round_num}"
-
-    # Индикатор равного количества игр после этого раунда
-    equal_games = t.will_round_equalize_games(pair.team1 + pair.team2)
-    equal_icon = "⚖️" if equal_games else ""
-
-    msg_text = f"{msg_prefix} {equal_icon}\n" \
-               f"🔹 {pair.team1[0].name} & {pair.team1[1].name}\n\tvs\t\n" \
-               f"🔸 {pair.team2[0].name} & {pair.team2[1].name}\n\n" \
-               f"Select team and enter its score:"
-
-    keyboard = [[
-        InlineKeyboardButton("🔹 Team 1", callback_data="score_team1"),
-        InlineKeyboardButton("🔸 Team 2", callback_data="score_team2")
-    ]]
-    if t.round > 1 and not pending_scores[chat_id].get('edit'):
-        keyboard.append([InlineKeyboardButton("Edit Last Round", callback_data="edit_last_round")])
-
-    sent = await context.bot.send_message(chat_id, msg_text, reply_markup=InlineKeyboardMarkup(keyboard))
-    pending_scores[chat_id]['round_msg_id'] = sent.message_id
-    chat_tournaments[chat_id]['round_msg_id'] = sent.message_id
+    pair = t.select_next_pair()
+    if not pair:
+        await context.bot.send_message(chat_id, "Waiting for 4 players...")
+        await show_standings(chat_id, context)
+        return
+    pending_scores[chat_id] = {'pair': pair}
+    await show_standings(chat_id, context)
 
 # -------------------- Callbacks --------------------
 
@@ -262,6 +246,7 @@ async def handle_callback(update, context):
     if data == "start_new_tournament":
         pending_player_selection[chat_id] = {'selected': []}
         await show_player_selection(query, context, chat_id)
+        await context.bot.delete_message(chat_id, query.message.message_id)
         return
 
     if data == "add_new_player":
@@ -390,10 +375,48 @@ async def handle_callback(update, context):
         await show_standings(chat_id, context)
         await next_pair(chat_id, context)
 
-    elif data in ["score_team1", "score_team2"]:
+    elif data == "result_draw":
         pair = pending_scores[chat_id]['pair']
-        selected_team = pair.team1 if data == "score_team1" else pair.team2
-        pending_scores[chat_id]['selected_team'] = selected_team
+        half = t.round_points // 2
+        pair.score = f"{half}-{half}"
+
+        is_edit = 'edit_index' in pending_scores[chat_id]
+
+        # Обновление статистики как draw
+        for p in pair.team1 + pair.team2:
+            if not is_edit:
+                p.games_played += 1
+            p.draws += 1
+            p.points += half
+
+        # Добавляем в историю
+        if is_edit:
+            idx = pending_scores[chat_id]['edit_index']
+            round_num = pending_scores[chat_id]['edit_round']
+            t.round_history[idx] = {
+                "round": round_num,
+                "team1": [p.name for p in pair.team1],
+                "team2": [p.name for p in pair.team2],
+                "score": pair.score
+            }
+        else:
+            t.round_history.append({
+                "round": t.round,
+                "team1": [p.name for p in pair.team1],
+                "team2": [p.name for p in pair.team2],
+                "score": pair.score
+            })
+
+        del pending_scores[chat_id]
+        if not is_edit:
+            t.round += 1
+        await show_standings(chat_id, context)
+        await next_pair(chat_id, context)
+
+    elif data in ["result_team1", "result_team2"]:
+        pair = pending_scores[chat_id]['pair']
+        winner_team = pair.team1 if data == "result_team1" else pair.team2
+        pending_scores[chat_id]['winner_team'] = winner_team
 
         # Remove buttons from round message, keep the message
         if pending_scores[chat_id].get('round_msg_id'):
@@ -406,42 +429,33 @@ async def handle_callback(update, context):
             except:
                 pass
 
-        await show_score_buttons(chat_id, context, selected_team)
+        await show_score_buttons(chat_id, context, winner_team)
 
 
     elif data.startswith("set_score_"):
         score = int(data.split("_")[-1])
         pair = pending_scores[chat_id]['pair']
-        selected_team = pending_scores[chat_id]['selected_team']
-        other_team = [p for p in pair.team1 + pair.team2 if p not in selected_team]
+        winner_team = pending_scores[chat_id]['winner_team']
+        other_team = [p for p in pair.team1 + pair.team2 if p not in winner_team]
 
         opponent_score = t.round_points - score
 
-        # Обновление статистики
-        for p in pair.team1 + pair.team2:
-            p.games_played += 1
+        is_edit = 'edit_index' in pending_scores[chat_id]
 
-        if score == opponent_score:
-            for p in pair.team1 + pair.team2:
-                p.draws += 1
-                p.points += score
-        elif score > opponent_score:
-            for p in selected_team:
-                p.wins += 1
-                p.points += score
-            for p in other_team:
-                p.losses += 1
-                p.points += opponent_score
-        else:
-            for p in selected_team:
-                p.losses += 1
-                p.points += score
-            for p in other_team:
-                p.wins += 1
-                p.points += opponent_score
+        # Обновление статистики: winner_team wins, other_team loses
+        for p in pair.team1 + pair.team2:
+            if not is_edit:
+                p.games_played += 1
+
+        for p in winner_team:
+            p.wins += 1
+            p.points += score
+        for p in other_team:
+            p.losses += 1
+            p.points += opponent_score
 
         # Set score in team1 - team2 order
-        if selected_team == pair.team1:
+        if winner_team == pair.team1:
             team1_score = score
             team2_score = opponent_score
         else:
@@ -450,10 +464,11 @@ async def handle_callback(update, context):
         pair.score = f"{team1_score}-{team2_score}"
 
         # Добавляем в историю
-        if pending_scores[chat_id].get('edit'):
-            # Заменяем последний раунд новым score
-            t.round_history[-1] = {
-                "round": t.round - 1,
+        if is_edit:
+            idx = pending_scores[chat_id]['edit_index']
+            round_num = pending_scores[chat_id]['edit_round']
+            t.round_history[idx] = {
+                "round": round_num,
                 "team1": [p.name for p in pair.team1],
                 "team2": [p.name for p in pair.team2],
                 "score": pair.score
@@ -473,15 +488,143 @@ async def handle_callback(update, context):
             except:
                 pass
 
-        await context.bot.send_message(chat_id, f"🏁 Round finished\nScore: {pair.score}")
-
-        is_edit = pending_scores[chat_id].get('edit', False)
         del pending_scores[chat_id]
         if not is_edit:
             t.round += 1
         await show_standings(chat_id, context)
         await next_pair(chat_id, context)
 
+    elif data.startswith("edit_round_"):
+        round_num = int(data.split('_')[2])
+        for i, r in enumerate(t.round_history):
+            if r['round'] == round_num:
+                # Откатить статистику
+                team1_names = r["team1"]
+                team2_names = r["team2"]
+                score_str = r["score"]
+                team1_score, team2_score = map(int, score_str.split("-"))
+                
+                # Найти игроков
+                team1 = [p for p in t.players if p.name in team1_names]
+                team2 = [p for p in t.players if p.name in team2_names]
+                
+                # Откатить games_played
+                for p in team1 + team2:
+                    p.games_played -= 1
+                
+                # Откатить wins, draws, losses, points
+                if team1_score == team2_score:
+                    for p in team1 + team2:
+                        p.draws -= 1
+                        p.points -= team1_score
+                elif team1_score > team2_score:
+                    for p in team1:
+                        p.wins -= 1
+                        p.points -= team1_score
+                    for p in team2:
+                        p.losses -= 1
+                        p.points -= team2_score
+                else:
+                    for p in team1:
+                        p.losses -= 1
+                        p.points -= team1_score
+                    for p in team2:
+                        p.wins -= 1
+                        p.points -= team2_score
+                
+                # Создать pair
+                pair = Pair(team1, team2)
+                for p in team1 + team2:
+                    p.current_pair = pair
+                
+                pending_scores[chat_id] = {'pair': pair, 'edit': True, 'edit_index': i, 'edit_round': round_num}
+                
+                await show_standings(chat_id, context)
+                break
+
+    elif data.startswith("set_draw_round_"):
+        round_num = int(data.split("_")[-1])
+        for i, r in enumerate(t.round_history):
+            if r['round'] == round_num:
+                # Rollback current stats
+                team1_names = r["team1"]
+                team2_names = r["team2"]
+                team1 = [p for p in t.players if p.name in team1_names]
+                team2 = [p for p in t.players if p.name in team2_names]
+                score1, score2 = map(int, r['score'].split('-'))
+                # Rollback
+                if score1 == score2:
+                    for p in team1 + team2:
+                        p.draws -= 1
+                        p.points -= score1
+                elif score1 > score2:
+                    for p in team1:
+                        p.wins -= 1
+                        p.points -= score1
+                    for p in team2:
+                        p.losses -= 1
+                        p.points -= score2
+                else:
+                    for p in team1:
+                        p.losses -= 1
+                        p.points -= score1
+                    for p in team2:
+                        p.wins -= 1
+                        p.points -= score2
+                # Set to draw
+                half = t.round_points // 2
+                for p in team1 + team2:
+                    p.draws += 1
+                    p.points += half
+                r['score'] = f"{half}-{half}"
+                t.round_history[i] = r
+                await show_standings(chat_id, context)
+                break
+
+    elif data.startswith("set_winner_team1_round_") or data.startswith("set_winner_team2_round_"):
+        team = "team1" if "team1" in data else "team2"
+        round_num = int(data.split("_")[-1])
+        for i, r in enumerate(t.round_history):
+            if r['round'] == round_num:
+                team1_names = r["team1"]
+                team2_names = r["team2"]
+                team1 = [p for p in t.players if p.name in team1_names]
+                team2 = [p for p in t.players if p.name in team2_names]
+                winner_team = team1 if team == "team1" else team2
+                # Rollback current
+                score1, score2 = map(int, r['score'].split('-'))
+                if score1 == score2:
+                    for p in team1 + team2:
+                        p.draws -= 1
+                        p.points -= score1
+                elif score1 > score2:
+                    for p in team1:
+                        p.wins -= 1
+                        p.points -= score1
+                    for p in team2:
+                        p.losses -= 1
+                        p.points -= score2
+                else:
+                    for p in team1:
+                        p.losses -= 1
+                        p.points -= score1
+                    for p in team2:
+                        p.wins -= 1
+                        p.points -= score2
+                # Set pending for score
+                pair = Pair(team1, team2)
+                pending_scores[chat_id] = {'pair': pair, 'winner_team': winner_team, 'edit_index': i, 'edit_round': round_num}
+                await show_score_buttons(chat_id, context, winner_team)
+                break
+
+    elif data == "edit_rounds":
+        pending_edit_selection[chat_id] = True
+        await show_standings(chat_id, context)
+
+    elif data == "back_to_standings":
+        if chat_id in pending_edit_selection:
+            del pending_edit_selection[chat_id]
+        await show_standings(chat_id, context)
 # -------------------- Messages --------------------
 
 async def handle_message(update, context):
@@ -508,14 +651,56 @@ async def show_standings(chat_id, context):
         lines.append(f"{i}. {p.name:<{max_name_len}} | Games: {p.games_played:<2} | W: {p.wins:<2} | D: {p.draws:<2} | L: {p.losses:<2} | Pts: {p.points:<3}")
     msg = "📊 Standings:\n<pre>\n" + "\n".join(lines) + "\n</pre>"
 
+    # Add round history
+    if t.round_history:
+        msg += "\n\n📜 Round History:"
+        for i, r in enumerate(t.round_history):
+            team1_str = f"{r['team1'][0]} & {r['team1'][1]}"
+            team2_str = f"{r['team2'][0]} & {r['team2'][1]}"
+            score1, score2 = map(int, r['score'].split('-'))
+            result = "Draw" if score1 == score2 else ("Team 1 Win" if score1 > score2 else "Team 2 Win")
+            msg += f"\n\n🏓 Round {r['round']}\n🔹 {team1_str}\n\tvs\n🔸 {team2_str}\nScore: {r['score']}, {result}\n<code>────────────</code>"
+            if i < len(t.round_history) - 1:
+                msg += ""
+
+    # Add current round if pending
+    keyboard = []
+    if chat_id in pending_scores:
+        pair = pending_scores[chat_id]['pair']
+        if pending_scores[chat_id].get('edit'):
+            round_num = pending_scores[chat_id].get('edit_round', t.round - 1)
+            msg_prefix = f"Edit Round {round_num}"
+        else:
+            round_num = t.round
+            msg_prefix = f"🏓 Round {round_num}"
+        equal_games = t.will_round_equalize_games(pair.team1 + pair.team2)
+        equal_icon = "⚖️" if equal_games else ""
+        msg += f"\n\n{msg_prefix}\n🔹 {pair.team1[0].name} & {pair.team1[1].name}\n\tvs\n🔸 {pair.team2[0].name} & {pair.team2[1].name}\n\nSelect result {equal_icon}:"
+        keyboard = [[
+            InlineKeyboardButton("Draw", callback_data="result_draw"),
+            InlineKeyboardButton("Winner: 🔹 Team 1", callback_data="result_team1"),
+            InlineKeyboardButton("Winner: 🔸 Team 2", callback_data="result_team2")
+        ]]
+
+    # Add edit buttons
+    if t.round_history:
+        keyboard.append([InlineKeyboardButton("Edit Rounds", callback_data="edit_rounds")])
+
+    if chat_id in pending_edit_selection:
+        keyboard = []
+        for r in t.round_history:
+            keyboard.append([InlineKeyboardButton(f"Edit Round {r['round']}", callback_data=f"edit_round_{r['round']}")])
+            keyboard.append([InlineKeyboardButton(f"Draw Round {r['round']}", callback_data=f"set_draw_round_{r['round']}"), InlineKeyboardButton(f"Winner: Team 1 Round {r['round']}", callback_data=f"set_winner_team1_round_{r['round']}"), InlineKeyboardButton(f"Winner: Team 2 Round {r['round']}", callback_data=f"set_winner_team2_round_{r['round']}")])
+        keyboard.append([InlineKeyboardButton("Back to Standings", callback_data="back_to_standings")])
+
     if t.stats_msg_id:
         try:
-            await context.bot.edit_message_text(chat_id=chat_id, message_id=t.stats_msg_id, text=msg, parse_mode="HTML")
+            await context.bot.edit_message_text(chat_id=chat_id, message_id=t.stats_msg_id, text=msg, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard) if keyboard else None)
         except:
-            sent = await context.bot.send_message(chat_id, msg, parse_mode="HTML")
+            sent = await context.bot.send_message(chat_id, msg, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard) if keyboard else None)
             t.stats_msg_id = sent.message_id
     else:
-        sent = await context.bot.send_message(chat_id, msg, parse_mode="HTML")
+        sent = await context.bot.send_message(chat_id, msg, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard) if keyboard else None)
         t.stats_msg_id = sent.message_id
 
 # -------------------- Finalization & Export --------------------
@@ -552,10 +737,10 @@ async def finalize_tournament(chat_id, context):
         except:
             pass
 
-    # Delete standings message
+    # Remove buttons from standings message
     if t.stats_msg_id:
         try:
-            await context.bot.delete_message(chat_id, t.stats_msg_id)
+            await context.bot.edit_message_reply_markup(chat_id=chat_id, message_id=t.stats_msg_id, reply_markup=None)
         except:
             pass
 
@@ -572,7 +757,10 @@ async def finalize_tournament(chat_id, context):
             medal = "🥉"
         lines.append(f"{medal} {i}. {p.name:<{max_name_len}} | Games: {p.games_played:<2} | W: {p.wins:<2} | D: {p.draws:<2} | L: {p.losses:<2} | Pts: {p.points:<3}")
     msg = "🏆 Tournament Finished!\n📊 Final Standings:\n<pre>\n" + "\n".join(lines) + "\n</pre>"
-    await context.bot.send_message(chat_id, msg, parse_mode="HTML")
+    if t.stats_msg_id:
+        await context.bot.edit_message_text(chat_id=chat_id, message_id=t.stats_msg_id, text=msg, parse_mode="HTML")
+    else:
+        await context.bot.send_message(chat_id, msg, parse_mode="HTML")
 
     # --- Export CSV ---
     # History
@@ -609,7 +797,10 @@ async def finalize_tournament(chat_id, context):
 async def error_handler(update, context):
     logger.warning('Update "%s" caused error "%s"', update, context.error)
     if update and update.effective_chat:
-        await context.bot.send_message(chat_id=update.effective_chat.id, text="An error occurred. Please try again.")
+        try:
+            await context.bot.send_message(chat_id=update.effective_chat.id, text="An error occurred. Please try again.")
+        except RetryAfter:
+            pass  # Avoid sending message if flood control is active
 
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
