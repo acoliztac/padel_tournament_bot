@@ -59,7 +59,7 @@ class Tournament:
             return None
 
         # 4 игрока с наименьшим количеством игр
-        available_players = sorted(self.players, key=lambda p: (p.games_played, -p.points, random.random()))
+        available_players = sorted(self.players, key=lambda p: (p.games_played, random.random()))
         selected = available_players[:4]
 
         # Сортируем по очкам: p1=max, p2>=p3, p4=min
@@ -431,7 +431,6 @@ async def handle_callback(update, context):
 
         await show_score_buttons(chat_id, context, winner_team)
 
-
     elif data.startswith("set_score_"):
         score = int(data.split("_")[-1])
         pair = pending_scores[chat_id]['pair']
@@ -625,6 +624,19 @@ async def handle_callback(update, context):
         if chat_id in pending_edit_selection:
             del pending_edit_selection[chat_id]
         await show_standings(chat_id, context)
+
+    elif data == "regenerate_pair":
+        # Отменяем текущую pending пару, если она есть
+        if chat_id in pending_scores:
+            # Сбрасываем current_pair у игроков, чтобы они снова были доступны
+            if 'pair' in pending_scores[chat_id]:
+                for p in pending_scores[chat_id]['pair'].team1 + pending_scores[chat_id]['pair'].team2:
+                    p.current_pair = None
+            del pending_scores[chat_id]
+
+        # Генерируем новую пару
+        await next_pair(chat_id, context)
+        return
 # -------------------- Messages --------------------
 
 async def handle_message(update, context):
@@ -681,6 +693,9 @@ async def show_standings(chat_id, context):
             InlineKeyboardButton("Winner: 🔹 Team 1", callback_data="result_team1"),
             InlineKeyboardButton("Winner: 🔸 Team 2", callback_data="result_team2")
         ]]
+
+    # Add regenerate button if pending
+    keyboard.append([InlineKeyboardButton("🔄 Перегенерировать команды", callback_data="regenerate_pair")])
 
     # Add edit buttons
     if t.round_history:
