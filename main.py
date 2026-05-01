@@ -22,6 +22,132 @@ logger = logging.getLogger(__name__)
 # Global player pool
 players_pool = ["Никита", "Аннушка", "Денис", "Оля", "Дуэр", "Флоста"]
 
+# -------------------- Analytics --------------------
+
+def calculate_fair_table(tournament):
+    """
+    FAIR TABLE: Normalize all players to the minimum number of games.
+    VALUE = P - O/2 (player's score - opponent's score/2)
+    Remove least valuable matches until all have equal games.
+    """
+    if not tournament.round_history:
+        return []
+    
+    # Create player data structure with all matches
+    player_matches = {}
+    for p in tournament.players:
+        player_matches[p.name] = []
+    
+    # Collect all matches for each player
+    for round_data in tournament.round_history:
+        team1 = round_data["team1"]
+        team2 = round_data["team2"]
+        score1, score2 = map(int, round_data["score"].split("-"))
+        
+        # Add match to both team members
+        for player_name in team1:
+            player_matches[player_name].append({
+                "round": round_data["round"],
+                "teammate": team1[0] if team1[0] != player_name else team1[1],
+                "opponents": team2,
+                "player_score": score1,
+                "opponent_score": score2,
+                "value": score1 - score2 / 2
+            })
+        
+        for player_name in team2:
+            player_matches[player_name].append({
+                "round": round_data["round"],
+                "teammate": team2[0] if team2[0] != player_name else team2[1],
+                "opponents": team1,
+                "player_score": score2,
+                "opponent_score": score1,
+                "value": score2 - score1 / 2
+            })
+    
+    # Find minimum games played
+    min_games = min(len(matches) for matches in player_matches.values()) if player_matches else 0
+    
+    # Calculate normalized stats
+    normalized_stats = []
+    for player_name, matches in player_matches.items():
+        # Sort by value ascending (remove least valuable first)
+        sorted_matches = sorted(matches, key=lambda m: m["value"])
+        
+        # Keep only min_games matches
+        kept_matches = sorted_matches[len(sorted_matches) - min_games:] if len(sorted_matches) > min_games else sorted_matches
+        
+        total_points = sum(m["player_score"] for m in kept_matches)
+        games = len(kept_matches)
+        
+        normalized_stats.append({
+            "player": player_name,
+            "games": games,
+            "points": total_points
+        })
+    
+    # Sort by points (descending) then player name
+    normalized_stats.sort(key=lambda x: (-x["points"], x["player"]))
+    
+    return normalized_stats
+
+def calculate_fun_table(tournament):
+    """
+    FUN TABLE: Measure "interestingness" of matches.
+    fun per match = max(0, 10 - abs(score_diff))
+    """
+    if not tournament.round_history:
+        return []
+    
+    player_fun = {}
+    for p in tournament.players:
+        player_fun[p.name] = 0
+    
+    for round_data in tournament.round_history:
+        team1 = round_data["team1"]
+        team2 = round_data["team2"]
+        score1, score2 = map(int, round_data["score"].split("-"))
+        
+        score_diff = abs(score1 - score2)
+        fun_score = max(0, 10 - score_diff)
+        
+        # Add fun score to all players in the match
+        for player_name in team1 + team2:
+            player_fun[player_name] += fun_score
+    
+    # Create result list with place
+    fun_stats = [
+        {"player": name, "fun_score": score}
+        for name, score in player_fun.items()
+    ]
+    
+    # Sort by fun_score descending, then by player name for deterministic ordering
+    fun_stats.sort(key=lambda x: (-x["fun_score"], x["player"]))
+    
+    return fun_stats
+
+def get_raw_match_table(tournament):
+    """
+    RAW MATCH TABLE: Display all matches in order.
+    """
+    if not tournament.round_history:
+        return []
+    
+    matches = []
+    for round_data in tournament.round_history:
+        team1 = round_data["team1"]
+        team2 = round_data["team2"]
+        score = round_data["score"]
+        
+        matches.append({
+            "round": round_data["round"],
+            "team1": f"{team1[0]} & {team1[1]}",
+            "score": score,
+            "team2": f"{team2[0]} & {team2[1]}"
+        })
+    
+    return matches
+
 # -------------------- Classes --------------------
 
 class Player:
@@ -776,12 +902,43 @@ async def finalize_tournament(chat_id, context):
             medal = "🥉"
         lines.append(f"{medal} {i}. {p.name:<{max_name_len}} | Games: {p.games_played:<2} | W: {p.wins:<2} | D: {p.draws:<2} | L: {p.losses:<2} | Pts: {p.points:<3}")
     msg = "🏆 Tournament Finished!\n📊 Final Standings:\n<pre>\n" + "\n".join(lines) + "\n</pre>"
+    
+    # Add Fair Table (Normalized Games)
+    fair_table = calculate_fair_table(t)
+    fair_lines = []
+    for i, entry in enumerate(fair_table, 1):
+        medal = "▫️"
+        if i == 1:
+            medal = "🥇"
+        elif i == 2:
+            medal = "🥈"
+        elif i == 3:
+            medal = "🥉"
+        fair_lines.append(f"{medal} {i}. {entry['player']:<{max_name_len}} | Games: {entry['games']:<2} | Pts: {entry['points']:<3}")
+    msg += "\n\n⚖️ Fair Table (Normalized Games):\n<pre>\n" + "\n".join(fair_lines) + "\n</pre>"
+    
+    # Add Fun Table (Match Interestingness)
+    fun_table = calculate_fun_table(t)
+    fun_lines = []
+    for i, entry in enumerate(fun_table, 1):
+        fun_lines.append(f"{i}. {entry['player']:<{max_name_len}} | Fun Score: {entry['fun_score']:<3}")
+    msg += "\n\n🎉 Fun Table (Close Matches):\n<pre>\n" + "\n".join(fun_lines) + "\n</pre>"
+    
+    # Add Raw Match Table
+    raw_matches = get_raw_match_table(t)
+    matches_lines = []
+    if raw_matches:
+        max_team_len = max(len(m['team1']) for m in raw_matches)
+        for match in raw_matches:
+            matches_lines.append(f"R{match['round']} | {match['team1']:<{max_team_len}} | {match['score']:<5} | {match['team2']}")
+        msg += "\n\n📜 Match History:\n<pre>\n" + "\n".join(matches_lines) + "\n</pre>"
+    
     if t.stats_msg_id:
         await context.bot.edit_message_text(chat_id=chat_id, message_id=t.stats_msg_id, text=msg, parse_mode="HTML")
     else:
         await context.bot.send_message(chat_id, msg, parse_mode="HTML")
 
-    # --- Export CSV ---
+    # --- Export CSV for backup ---
     # History
     history_csv = io.StringIO()
     writer = csv.writer(history_csv)
