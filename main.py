@@ -712,6 +712,10 @@ async def show_standings(chat_id, context):
         try:
             await context.bot.edit_message_text(chat_id=chat_id, message_id=t.stats_msg_id, text=msg, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard) if keyboard else None)
         except:
+            try:
+                await context.bot.delete_message(chat_id, t.stats_msg_id)
+            except:
+                pass
             sent = await context.bot.send_message(chat_id, msg, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard) if keyboard else None)
             t.stats_msg_id = sent.message_id
     else:
