@@ -30,6 +30,7 @@ def calculate_fair_table(tournament):
     FAIR TABLE: Normalize all players to the minimum number of games.
     VALUE = P - O/2 (player's score - opponent's score/2)
     Remove least valuable matches until all have equal games.
+    Now also includes wins, losses, and draws count.
     """
     if not tournament.round_history:
         return []
@@ -81,15 +82,30 @@ def calculate_fair_table(tournament):
         total_points = sum(m["player_score"] for m in kept_matches)
         games = len(kept_matches)
         
+        # Count wins, losses, and draws
+        wins = 0
+        losses = 0
+        draws = 0
+        for match in kept_matches:
+            if match["player_score"] > match["opponent_score"]:
+                wins += 1
+            elif match["player_score"] < match["opponent_score"]:
+                losses += 1
+            else:
+                draws += 1
+        
         normalized_stats.append({
             "player": player_name,
             "games": games,
-            "points": total_points
+            "points": total_points,
+            "wins": wins,
+            "losses": losses,
+            "draws": draws
         })
     
-    # Sort by points (descending) then player name
-    normalized_stats.sort(key=lambda x: (-x["points"], x["player"]))
-    
+    # Sort by points (descending), then by wins (descending), then player name
+    normalized_stats.sort(key=lambda x: (-x["points"], -x["wins"], x["player"]))
+
     return normalized_stats
 
 def calculate_fun_table(tournament):
@@ -1047,7 +1063,7 @@ async def finalize_tournament(chat_id, context):
             medal = "🥈"
         elif i == 3:
             medal = "🥉"
-        fair_lines.append(f"{medal} {i}. {entry['player']:<{max_name_len}} | Игры: {entry['games']:<2} | Оч: {entry['points']:<3}")
+        fair_lines.append(f"{medal} {i}. {entry['player']:<{max_name_len}} | Игры: {entry['games']:<2} | П: {entry['wins']:<2} | Н: {entry['draws']:<2} | Пр: {entry['losses']:<2} | Оч: {entry['points']:<3}")
     msg += "\n\n⚖️ Справедливые результаты (с учётом равенства игр):\n<pre>\n" + "\n".join(fair_lines) + "\n</pre>"
     
     # Add Fun Table (Match Interestingness)
