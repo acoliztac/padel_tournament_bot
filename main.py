@@ -240,6 +240,7 @@ pending_player_selection = {}
 pending_edit_selection = {}
 pending_manual_pair = {}
 pending_regenerate_menu = {}
+pending_management = {}
 
 # -------------------- Handlers --------------------
 
@@ -788,11 +789,23 @@ async def handle_callback(update, context):
     elif data == "back_to_standings":
         if chat_id in pending_edit_selection:
             del pending_edit_selection[chat_id]
+        if chat_id in pending_management:
+            del pending_management[chat_id]
+        await show_standings(chat_id, context)
+
+    elif data == "edit_rounds":
+        pending_edit_selection[chat_id] = True
+        await show_standings(chat_id, context)
+
+    elif data == "management":
+        pending_management[chat_id] = True
         await show_standings(chat_id, context)
 
     elif data == "regenerate_auto":
         if chat_id in pending_regenerate_menu:
             del pending_regenerate_menu[chat_id]
+        if chat_id in pending_management:
+            del pending_management[chat_id]
         if chat_id in pending_scores:
             del pending_scores[chat_id]
         await next_pair(chat_id, context)
@@ -801,6 +814,8 @@ async def handle_callback(update, context):
     elif data == "regenerate_manual":
         if chat_id in pending_regenerate_menu:
             del pending_regenerate_menu[chat_id]
+        if chat_id in pending_management:
+            del pending_management[chat_id]
         pending_manual_pair[chat_id] = {'team1': [], 'team2': []}
         await show_standings(chat_id, context)
         return
@@ -840,6 +855,8 @@ async def handle_callback(update, context):
         pair = Pair(team1, team2)
         for p in team1 + team2:
             p.current_pair = pair
+        if chat_id in pending_management:
+            del pending_management[chat_id]
         pending_scores[chat_id] = {'pair': pair}
         del pending_manual_pair[chat_id]
         await show_standings(chat_id, context)
@@ -919,18 +936,37 @@ async def show_standings(chat_id, context):
             InlineKeyboardButton("Победитель: 🔸 ", callback_data="result_team2")
         ]]
 
-    # Add regenerate button if pending
-    keyboard.append([
-        InlineKeyboardButton("🔄 Перегенерировать команды", callback_data="regenerate_auto"),
-        InlineKeyboardButton("👉 Ручная генерация команд", callback_data="regenerate_manual")
-    ])
+    if not (chat_id in pending_edit_selection or chat_id in pending_manual_pair):
+        keyboard.append([InlineKeyboardButton("⚙️ Управление", callback_data="management")])
 
     if chat_id in pending_edit_selection:
         keyboard = []
         for r in t.round_history:
             keyboard.append([InlineKeyboardButton(f"Редактировать раунд {r['round']}", callback_data=f"edit_round_{r['round']}")])
-            keyboard.append([InlineKeyboardButton(f"Ничья", callback_data=f"set_draw_round_{r['round']}"), InlineKeyboardButton(f"Победитель: Победитель: 🔹 ", callback_data=f"set_winner_team1_round_{r['round']}"), InlineKeyboardButton(f"Победитель: 🔸 ", callback_data=f"set_winner_team2_round_{r['round']}")])
+            keyboard.append([InlineKeyboardButton(f"Ничья", callback_data=f"set_draw_round_{r['round']}"), InlineKeyboardButton(f"Победитель: 🔹 ", callback_data=f"set_winner_team1_round_{r['round']}"), InlineKeyboardButton(f"Победитель: 🔸 ", callback_data=f"set_winner_team2_round_{r['round']}")])
         keyboard.append([InlineKeyboardButton("Вернуться к таблице", callback_data="back_to_standings")])
+        try:
+            await context.bot.edit_message_text(chat_id=chat_id, message_id=t.stats_msg_id, text=msg, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
+        except:
+            sent = await context.bot.send_message(chat_id, msg, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
+            t.stats_msg_id = sent.message_id
+        return  # Не показывать обычные standings
+
+    if chat_id in pending_management:
+        keyboard = []
+        keyboard.append([
+            InlineKeyboardButton("🔄 Перегенерировать команды", callback_data="regenerate_auto"),
+            InlineKeyboardButton("👉 Ручная генерация команд", callback_data="regenerate_manual")
+        ])
+        if t.round_history:
+            keyboard.append([InlineKeyboardButton("Редактировать раунды", callback_data="edit_rounds")])
+        keyboard.append([InlineKeyboardButton("⬅️ Назад", callback_data="back_to_standings")])
+        try:
+            await context.bot.edit_message_text(chat_id=chat_id, message_id=t.stats_msg_id, text=msg, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
+        except:
+            sent = await context.bot.send_message(chat_id, msg, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
+            t.stats_msg_id = sent.message_id
+        return  # Не показывать обычные standings
 
     if chat_id in pending_manual_pair:
         team1 = pending_manual_pair[chat_id]['team1']
@@ -959,9 +995,9 @@ async def show_standings(chat_id, context):
         ])
         # Отправить или редактировать сообщение
         try:
-            await context.bot.edit_message_text(chat_id=chat_id, message_id=t.stats_msg_id, text=msg, reply_markup=InlineKeyboardMarkup(keyboard))
+            await context.bot.edit_message_text(chat_id=chat_id, message_id=t.stats_msg_id, text=msg, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
         except:
-            sent = await context.bot.send_message(chat_id, msg, reply_markup=InlineKeyboardMarkup(keyboard))
+            sent = await context.bot.send_message(chat_id, msg, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
             t.stats_msg_id = sent.message_id
         return  # Не показывать обычные standings
 
@@ -1103,6 +1139,8 @@ async def finalize_tournament(chat_id, context):
         del pending_scores[chat_id]
     if chat_id in pending_manual_pair:
         del pending_manual_pair[chat_id]
+    if chat_id in pending_edit_selection:
+        del pending_edit_selection[chat_id]
 
     # --- Start new tournament button ---
     keyboard = [[InlineKeyboardButton("Начать новый турнир", callback_data="start_new_tournament")]]
