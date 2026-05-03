@@ -404,7 +404,6 @@ async def handle_callback(update, context):
         if chat_id in pending_player_selection:
             del pending_player_selection[chat_id]
         
-        await context.bot.send_message(chat_id, f"Турнир '{name}' создан!\nИгроки:\n{"\n".join(f"- {p}" for p in selected)}")
         await show_tournament_mode(chat_id, context)
         await show_points_selection(chat_id, context)
         return
@@ -542,7 +541,6 @@ async def handle_callback(update, context):
                 await context.bot.delete_message(chat_id, chat_tournaments[chat_id]['points_msg_id'])
             except:
                 pass
-        await context.bot.send_message(chat_id, f"Очки за раунд установлены на {points}")
         await show_standings(chat_id, context)
         await next_pair(chat_id, context)
 
@@ -888,7 +886,7 @@ async def show_standings(chat_id, context):
     lines = []
     for i, p in enumerate(t.players, 1):
         lines.append(f"{i}. {p.name:<{max_name_len}} | Игры: {p.games_played:<2} | П: {p.wins:<2} | Н: {p.draws:<2} | Пр: {p.losses:<2} | Оч: {p.points:<3}")
-    msg = "📊 Турнирная таблица:\n<pre>\n" + "\n".join(lines) + "\n</pre>"
+    msg = f"🏆 {t.name}\n⚡ Очки за раунд: {t.round_points}\n\n📊 Турнирная таблица:\n<pre>\n" + "\n".join(lines) + "\n</pre>"
 
     # Add round history
     if t.round_history:
@@ -1050,7 +1048,7 @@ async def finalize_tournament(chat_id, context):
         elif i == 3:
             medal = "🥉"
         lines.append(f"{medal} {i}. {p.name:<{max_name_len}} | Игры: {p.games_played:<2} | П: {p.wins:<2} | Н: {p.draws:<2} | Пр: {p.losses:<2} | Оч: {p.points:<3}")
-    msg = "🏆 Турнир завершён!\n📊 Финальные результаты:\n<pre>\n" + "\n".join(lines) + "\n</pre>"
+    msg = f"🏆 {t.name}\n\n📊 Финальные результаты:\n<pre>\n" + "\n".join(lines) + "\n</pre>"
     
     # Add Fair Table (Normalized Games)
     fair_table = calculate_fair_table(t)
@@ -1071,7 +1069,7 @@ async def finalize_tournament(chat_id, context):
     fun_lines = []
     for i, entry in enumerate(fun_table, 1):
         fun_lines.append(f"{i}. {entry['player']:<{max_name_len}} | Средн. интерес: {entry['fun_score']:<5} | Игры: {entry['games']:<2}")
-    msg += "\n\n🎉 Самые фаново играющие:\n<pre>\n" + "\n".join(fun_lines) + "\n</pre>"
+    msg += "\n\n⚔️ Игроки с самыми напряжёнными матчами:\n<pre>\n" + "\n".join(fun_lines) + "\n</pre>"
     
     # Add Raw Match Table
     raw_matches = get_raw_match_table(t)
