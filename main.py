@@ -8,6 +8,19 @@ from telegram.error import RetryAfter
 from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQueryHandler, MessageHandler, filters
 
 from bot.tournament import Player, Pair, Tournament
+from bot.state import (
+    tournaments,
+    chat_tournaments,
+    pending_scores,
+    pending_new_player,
+    pending_player_selection,
+    pending_edit_selection,
+    pending_manual_pair,
+    pending_regenerate_menu,
+    pending_management,
+    players_pool,
+    anti_spam_msg_ids
+)
 
 import logging
 
@@ -18,12 +31,6 @@ BOT_TOKEN = os.getenv('BOT_TOKEN')
 # level DEBUG for more details, INFO for general info, WARNING for warnings, ERROR for errors
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.WARNING)
 logger = logging.getLogger(__name__)
-
-# Global player pool
-players_pool = ["Никита", "Аннушка", "Денис", "Оля", "Дуэр", "Флоста"]
-
-# Global dict for anti-spam message IDs
-anti_spam_msg_ids = {}
 
 # -------------------- Analytics --------------------
 
@@ -310,17 +317,6 @@ def get_raw_match_table(tournament):
     return matches
 
 
-# -------------------- Storage --------------------
-
-tournaments = {}
-chat_tournaments = {}
-pending_scores = {}
-pending_new_player = {}
-pending_player_selection = {}
-pending_edit_selection = {}
-pending_manual_pair = {}
-pending_regenerate_menu = {}
-pending_management = {}
 
 # -------------------- Handlers --------------------
 
