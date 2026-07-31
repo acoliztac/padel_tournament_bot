@@ -11,7 +11,7 @@ from bot.handlers.common import show_standings, add_final_table, add_raw_match_t
 from bot.state import pending_scores, tournaments, chat_tournaments, anti_spam_msg_ids, pending_edit_selection, \
     pending_manual_pair, pending_player_selection
 from bot.tournament import Tournament, Player
-from bot.utils.telegram_helpers import safe_delete_message
+from bot.utils.telegram_helpers import safe_delete_message, safe_edit_message_text
 from bot.utils.tournaments_helpers import get_tournament
 
 
@@ -106,7 +106,7 @@ async def finalize_tournament(chat_id, context):
             await context.bot.edit_message_text(chat_id=chat_id, message_id=t.stats_msg_id, text=msg, parse_mode="HTML")
         except RetryAfter as e:
             await asyncio.sleep(e.retry_after)
-            await context.bot.edit_message_text(chat_id=chat_id, message_id=t.stats_msg_id, text=msg, parse_mode="HTML")
+            await safe_edit_message_text(context.bot, chat_id, t.stats_msg_id, msg, parse_mode="HTML")
         except:
             pass  # If edit fails, just proceed
     else:

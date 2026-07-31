@@ -7,7 +7,7 @@ from bot.analytics import get_raw_match_table, calculate_fair_table, calculate_f
     calculate_tense_matches
 from bot.state import chat_tournaments, anti_spam_msg_ids, pending_scores, pending_manual_pair, pending_edit_selection, \
     players_pool, pending_player_selection, pending_management
-from bot.utils.telegram_helpers import safe_edit_message_reply_markup, safe_delete_message
+from bot.utils.telegram_helpers import safe_edit_message_reply_markup, safe_delete_message, safe_edit_message_text
 
 from bot.utils.tournaments_helpers import get_tournament
 
@@ -72,8 +72,8 @@ async def show_standings(chat_id, context):
                              InlineKeyboardButton(f"Win: 🔸 ", callback_data=f"set_winner_team2_round_{r['round']}")])
         keyboard.append([InlineKeyboardButton("Вернуться к таблице", callback_data="back_to_standings")])
         try:
-            await context.bot.edit_message_text(chat_id=chat_id, message_id=t.stats_msg_id, text=msg, parse_mode="HTML",
-                                                reply_markup=InlineKeyboardMarkup(keyboard))
+            await safe_edit_message_text(bot=context.bot, chat_id=chat_id, message_id=t.stats_msg_id, text=msg, parse_mode="HTML",
+                                         reply_markup=InlineKeyboardMarkup(keyboard))
         except:
             sent = await context.bot.send_message(chat_id, msg, parse_mode="HTML",
                                                   reply_markup=InlineKeyboardMarkup(keyboard))
@@ -145,8 +145,8 @@ async def show_standings(chat_id, context):
             except:
                 pass
             await asyncio.sleep(e.retry_after)
-            await context.bot.edit_message_text(chat_id=chat_id, message_id=t.stats_msg_id, text=msg, parse_mode="HTML",
-                                                reply_markup=InlineKeyboardMarkup(keyboard) if keyboard else None)
+            await safe_edit_message_text(bot=context.bot, chat_id=chat_id, message_id=t.stats_msg_id, text=msg, parse_mode="HTML",
+                                        reply_markup=InlineKeyboardMarkup(keyboard) if keyboard else None)
         except:
             await safe_delete_message(context.bot, chat_id, t.stats_msg_id)
             try:
@@ -214,12 +214,8 @@ async def show_player_selection(query, context, chat_id):
         f"- {p}" for p in selected) if selected else "Игроки не выбраны"
 
     if chat_tournaments.get(chat_id, {}).get('players_msg_id'):
-        await context.bot.edit_message_text(
-            chat_id=chat_id,
-            message_id=chat_tournaments[chat_id]['players_msg_id'],
-            text=msg_text,
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
+        await safe_edit_message_text(bot=context.bot, chat_id=chat_id, message_id=chat_tournaments[chat_id]['players_msg_id'], text=msg_text,
+                                     reply_markup=InlineKeyboardMarkup(keyboard))
     elif query.message:
         sent_msg = await query.message.reply_text(msg_text, reply_markup=InlineKeyboardMarkup(keyboard))
         if chat_id not in chat_tournaments:
@@ -238,14 +234,9 @@ async def show_tournament_mode(chat_id, context):
     msg_text = "Турнир в процессе..."
 
     if chat_tournaments[chat_id].get('tournament_msg_id'):
-        try:
-            await context.bot.edit_message_text(
-                chat_id=chat_id,
-                message_id=chat_tournaments[chat_id]['tournament_msg_id'],
-                text=msg_text,
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
-        except:
+        success = await safe_edit_message_text(bot=context.bot, chat_id=chat_id, message_id=chat_tournaments[chat_id]['tournament_msg_id'], text=msg_text,
+                                         reply_markup=InlineKeyboardMarkup(keyboard))
+        if not success:
             sent_msg = await context.bot.send_message(chat_id, msg_text, reply_markup=InlineKeyboardMarkup(keyboard))
             chat_tournaments[chat_id]['tournament_msg_id'] = sent_msg.message_id
     else:
