@@ -54,7 +54,7 @@ async def show_standings(chat_id, context):
         equal_icon = "⚖️" if equal_games else ""
         msg += f"\n\n{msg_prefix}\n🔹 {pair.team1[0].name} & {pair.team1[1].name}\n\tvs\n🔸 {pair.team2[0].name} & {pair.team2[1].name}\n\nВыберите победителя {equal_icon}:"
         keyboard = [[
-            InlineKeyboardButton("Ничья", callback_data="result_draw"),
+            InlineKeyboardButton("Ничья", callback_data="set_draw"),
             InlineKeyboardButton("Win: 🔹 ", callback_data="result_team1"),
             InlineKeyboardButton("Win: 🔸 ", callback_data="result_team2")
         ]]

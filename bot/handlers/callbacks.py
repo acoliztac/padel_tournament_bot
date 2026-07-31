@@ -3,7 +3,7 @@ from bot.handlers.actions.management_actions import cancel_manual_pair, reset_ma
     back_to_standings, set_winner_team, set_draw_round, edit_round
 from bot.handlers.actions.player_actions import deselect_player, select_player, confirm_delete, delete_player, \
     select_all_players, add_new_player
-from bot.handlers.actions.round_actions import set_score, result_team, result_draw
+from bot.handlers.actions.round_actions import set_score, set_draw, result_team
 from bot.handlers.actions.tournament_actions import set_round_points, finalize_tournament, start_new_tournament, \
     create_tournament
 from bot.handlers.common import (
@@ -60,8 +60,8 @@ async def handle_callback(update, context):
     elif data.startswith("set_round_points_"):
         await set_round_points(chat_id=chat_id, data=data, context=context)
 
-    elif data == "result_draw":
-        await result_draw(chat_id=chat_id, context=context)
+    elif data == "set_draw":
+        await set_draw(chat_id=chat_id, context=context)
 
     elif data in ["result_team1", "result_team2"]:
         await result_team(chat_id=chat_id, context=context, data=data)
