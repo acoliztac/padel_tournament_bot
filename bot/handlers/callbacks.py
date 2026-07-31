@@ -1,35 +1,13 @@
+from bot.handlers.actions.management_actions import cancel_manual_pair, reset_manual_pair, confirm_manual_pair, \
+    remove_from_team, add_to_team2, add_to_team1, regenerate_manual, regenerate_auto, management, edit_rounds, \
+    back_to_standings, set_winner_team, set_draw_round, edit_round
+from bot.handlers.actions.player_actions import deselect_player, select_player, confirm_delete, delete_player, \
+    select_all_players, add_new_player
+from bot.handlers.actions.round_actions import set_score, result_team, result_draw
+from bot.handlers.actions.tournament_actions import set_round_points, finalize_tournament, start_new_tournament, \
+    create_tournament
 from bot.handlers.common import (
     show_player_selection,
-)
-from bot.handlers.tournament_actions import (
-    finalize_tournament,
-    create_tournament,
-    start_new_tournament,
-    add_new_player,
-    select_all_players,
-    delete_player,
-    confirm_delete,
-    select_player,
-    deselect_player,
-    edit_last_round,
-    set_round_points,
-    result_draw,
-    result_team,
-    set_score,
-    cancel_manual_pair,
-    reset_manual_pair,
-    confirm_manual_pair,
-    remove_from_team,
-    add_to_team2,
-    add_to_team1,
-    regenerate_manual,
-    regenerate_auto,
-    management,
-    edit_rounds,
-    back_to_standings,
-    set_winner_team,
-    set_draw_round,
-    edit_round
 )
 from bot.state import chat_tournaments
 
@@ -78,9 +56,6 @@ async def handle_callback(update, context):
 
     elif data == "finish_tournament":
         await finalize_tournament(chat_id=chat_id, context=context)
-
-    elif data == "edit_last_round":
-        await edit_last_round(chat_id=chat_id, context=context)
 
     elif data.startswith("set_round_points_"):
         await set_round_points(chat_id=chat_id, data=data, context=context)
