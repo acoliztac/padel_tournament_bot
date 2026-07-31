@@ -2,6 +2,7 @@ import os
 import uuid
 import random
 import asyncio
+from collections import defaultdict
 from datetime import datetime
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ForceReply
@@ -29,7 +30,7 @@ def calculate_fair_table(tournament):
     """
     FAIR TABLE: Normalize all players to the minimum number of games.
     VALUE = P - O/2 (player's score - opponent's score/2)
-    Remove least valuable matches until all have equal games.
+    Remove the least valuable matches until all have equal games.
     Now also includes wins, losses, and draws count.
     """
     if not tournament.round_history:
@@ -152,6 +153,139 @@ def calculate_fun_table(tournament):
     
     return fun_stats
 
+def calculate_tense_matches(tournament):
+    """
+    TENSE MATCHES: Find the most intense matches based on close score differences.
+    Tension score = 10 - abs(score_diff) (same as fun_score)
+    Returns top 5 matches sorted by tension.
+    """
+    if not tournament.round_history:
+        return []
+    
+    tense_matches = []
+    for round_data in tournament.round_history:
+        team1 = round_data["team1"]
+        team2 = round_data["team2"]
+        score = round_data["score"]
+        score1, score2 = map(int, score.split("-"))
+        
+        score_diff = abs(score1 - score2)
+        tension_score = max(0, 10 - score_diff)
+        
+        tense_matches.append({
+            "round": round_data["round"],
+            "team1": f"{team1[0]} & {team1[1]}",
+            "team2": f"{team2[0]} & {team2[1]}",
+            "score": score,
+            "tension": tension_score,
+            "score_diff": score_diff
+        })
+    
+    # Sort by tension descending, then by score_diff ascending
+    tense_matches.sort(key=lambda x: (-x["tension"], x["score_diff"]))
+    
+    # Return top 5
+    return tense_matches[:3]
+
+def calculate_best_worst_partners(tournament):
+    if not tournament.round_history:
+        return {}
+
+    # -------------------------
+    # data structures
+    # -------------------------
+    partners = defaultdict(lambda: defaultdict(list))
+    enemies = defaultdict(lambda: defaultdict(list))
+
+    # -------------------------
+    # PROCESS MATCHES
+    # -------------------------
+    for r in tournament.round_history:
+        team1 = r["team1"]
+        team2 = r["team2"]
+        s1, s2 = map(int, r["score"].split("-"))
+
+        diff = s1 - s2  # team1 perspective
+        opp_diff = s2 - s1  # team2 perspective
+
+        # -------------------------
+        # TEAM 1
+        # -------------------------
+        for p in team1:
+            partner = team1[0] if team1[1] == p else team1[1]
+
+            # 🤝 partner effect
+            partners[p][partner].append(diff)
+
+            # 😈 enemies effect
+            for e in team2:
+                enemies[p][e].append(diff)
+
+        # -------------------------
+        # TEAM 2
+        # -------------------------
+        for p in team2:
+            partner = team2[0] if team2[1] == p else team2[1]
+
+            # 🤝 partner effect
+            partners[p][partner].append(opp_diff)
+
+            # 😈 enemies effect
+            for e in team1:
+                enemies[p][e].append(opp_diff)
+
+    # -------------------------
+    # FINAL CALCULATION
+    # -------------------------
+    result = {}
+
+    for player in partners.keys():
+
+        # 🤝 best partner
+        best_partner = None
+        best_avg = None
+        partners_summary = {}
+
+        for pr, vals in partners[player].items():
+            avg = sum(vals) / len(vals)
+
+            partners_summary[pr] = {
+                "avg": round(avg, 2),
+                "games": len(vals)
+            }
+
+            if best_avg is None or avg > best_avg:
+                best_avg = avg
+                best_partner = pr
+
+        # 😈 worst enemy
+        worst_enemy = None
+        worst_avg = None
+        enemies_summary = {}
+
+        for en, vals in enemies[player].items():
+            avg = sum(vals) / len(vals)
+
+            enemies_summary[en] = {
+                "avg": round(avg, 2),
+                "games": len(vals)
+            }
+
+            if worst_avg is None or avg < worst_avg:
+                worst_avg = avg
+                worst_enemy = en
+
+        result[player] = {
+            "favorite_partner": best_partner,
+            "favorite_avg": round(best_avg, 2) if best_avg is not None else None,
+            "worst_enemy": worst_enemy,
+            "worst_enemy_avg": round(worst_avg, 2) if worst_avg is not None else None,
+            "partners": partners_summary,
+            "opponents": enemies_summary
+        }
+
+    return result
+
 def get_raw_match_table(tournament):
     """
     RAW MATCH TABLE: Display all matches in order.
@@ -262,7 +396,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(chat_id, "Введите имя игрока:", reply_markup=ForceReply())
     else:
         await show_player_selection(update, context, chat_id)
-
 
 async def show_player_selection(update, context, chat_id):
     selected = pending_player_selection[chat_id]['selected']
@@ -932,8 +1065,8 @@ async def show_standings(chat_id, context):
         msg += f"\n\n{msg_prefix}\n🔹 {pair.team1[0].name} & {pair.team1[1].name}\n\tvs\n🔸 {pair.team2[0].name} & {pair.team2[1].name}\n\nВыберите победителя {equal_icon}:"
         keyboard = [[
             InlineKeyboardButton("Ничья", callback_data="result_draw"),
-            InlineKeyboardButton("Победитель: 🔹 ", callback_data="result_team1"),
-            InlineKeyboardButton("Победитель: 🔸 ", callback_data="result_team2")
+            InlineKeyboardButton("Win: 🔹 ", callback_data="result_team1"),
+            InlineKeyboardButton("Win: 🔸 ", callback_data="result_team2")
         ]]
 
     if not (chat_id in pending_edit_selection or chat_id in pending_manual_pair):
@@ -943,7 +1076,7 @@ async def show_standings(chat_id, context):
         keyboard = []
         for r in t.round_history:
             keyboard.append([InlineKeyboardButton(f"Редактировать раунд {r['round']}", callback_data=f"edit_round_{r['round']}")])
-            keyboard.append([InlineKeyboardButton(f"Ничья", callback_data=f"set_draw_round_{r['round']}"), InlineKeyboardButton(f"Победитель: 🔹 ", callback_data=f"set_winner_team1_round_{r['round']}"), InlineKeyboardButton(f"Победитель: 🔸 ", callback_data=f"set_winner_team2_round_{r['round']}")])
+            keyboard.append([InlineKeyboardButton(f"Ничья", callback_data=f"set_draw_round_{r['round']}"), InlineKeyboardButton(f"Win: 🔹 ", callback_data=f"set_winner_team1_round_{r['round']}"), InlineKeyboardButton(f"Win: 🔸 ", callback_data=f"set_winner_team2_round_{r['round']}")])
         keyboard.append([InlineKeyboardButton("Вернуться к таблице", callback_data="back_to_standings")])
         try:
             await context.bot.edit_message_text(chat_id=chat_id, message_id=t.stats_msg_id, text=msg, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
@@ -980,8 +1113,8 @@ async def show_standings(chat_id, context):
         available_players = [p.name for p in t.players if p.name not in team1 and p.name not in team2]
         for player in available_players:
             keyboard.append([
-                InlineKeyboardButton(f"➕ В Команду 1: {player}", callback_data=f"add_to_team1_{player}"),
-                InlineKeyboardButton(f"➕ В Команду 2: {player}", callback_data=f"add_to_team2_{player}")
+                InlineKeyboardButton(f"➕ 1: {player}", callback_data=f"add_to_team1_{player}"),
+                InlineKeyboardButton(f"➕ 2: {player}", callback_data=f"add_to_team2_{player}")
             ])
         # Кнопки для удаления
         for player in team1 + team2:
@@ -1038,84 +1171,43 @@ async def finalize_tournament(chat_id, context):
     t.players.sort(key=lambda p: (-p.points, -p.wins))
 
     # Delete score message
-    if chat_id in pending_scores and pending_scores[chat_id].get('score_msg_id'):
-        try:
-            await context.bot.delete_message(chat_id, pending_scores[chat_id]['score_msg_id'])
-        except:
-            pass
+    await delete_score_message(chat_id, context)
 
     # Delete tournament mode message
-    if chat_tournaments[chat_id].get('tournament_msg_id'):
-        try:
-            await context.bot.delete_message(chat_id, chat_tournaments[chat_id]['tournament_msg_id'])
-        except:
-            pass
+    await delete_tournament_mode_message(chat_id, context)
 
     # Delete round message
-    if chat_tournaments[chat_id].get('round_msg_id'):
-        try:
-            await context.bot.delete_message(chat_id, chat_tournaments[chat_id]['round_msg_id'])
-        except:
-            pass
+    await delete_round_message(chat_id, context)
 
     # Delete points selection message
-    if chat_tournaments[chat_id].get('points_msg_id'):
-        try:
-            await context.bot.delete_message(chat_id, chat_tournaments[chat_id]['points_msg_id'])
-        except:
-            pass
+    await delete_points_selection_message(chat_id, context)
 
     # Remove buttons from standings message
-    if t.stats_msg_id:
-        try:
-            await context.bot.edit_message_reply_markup(chat_id=chat_id, message_id=t.stats_msg_id, reply_markup=None)
-        except:
-            pass
+    await remove_buttons_from_standings_message(chat_id, context, t)
 
     # Show final standings without buttons
     max_name_len = max(len(p.name) for p in t.players)
-    lines = []
-    for i, p in enumerate(t.players, 1):
-        medal = "▫️"
-        if i == 1:
-            medal = "🥇"
-        elif i == 2:
-            medal = "🥈"
-        elif i == 3:
-            medal = "🥉"
-        lines.append(f"{medal} {i}. {p.name:<{max_name_len}} | Игры: {p.games_played:<2} | П: {p.wins:<2} | Н: {p.draws:<2} | Пр: {p.losses:<2} | Оч: {p.points:<3}")
-    msg = f"🏆 {t.name}\n\n📊 Финальные результаты:\n<pre>\n" + "\n".join(lines) + "\n</pre>"
-    
+
+    msg = ""
+
     # Add Fair Table (Normalized Games)
-    fair_table = calculate_fair_table(t)
-    fair_lines = []
-    for i, entry in enumerate(fair_table, 1):
-        medal = "▫️"
-        if i == 1:
-            medal = "🥇"
-        elif i == 2:
-            medal = "🥈"
-        elif i == 3:
-            medal = "🥉"
-        fair_lines.append(f"{medal} {i}. {entry['player']:<{max_name_len}} | Игры: {entry['games']:<2} | П: {entry['wins']:<2} | Н: {entry['draws']:<2} | Пр: {entry['losses']:<2} | Оч: {entry['points']:<3}")
-    msg += "\n\n⚖️ Справедливые результаты (с учётом равенства игр):\n<pre>\n" + "\n".join(fair_lines) + "\n</pre>"
-    
+    msg = await add_fair_table(max_name_len, msg, t)
+
+    # Add Tense Matches Table (Top 5 most intense matches)
+    msg = await add_tense_matches_table(msg, t)
+
     # Add Fun Table (Match Interestingness)
-    fun_table = calculate_fun_table(t)
-    fun_lines = []
-    for i, entry in enumerate(fun_table, 1):
-        fun_lines.append(f"{i}. {entry['player']:<{max_name_len}} | Средн. интерес: {entry['fun_score']:<5} | Игры: {entry['games']:<2}")
-    msg += "\n\n⚔️ Игроки с самыми напряжёнными матчами:\n<pre>\n" + "\n".join(fun_lines) + "\n</pre>"
-    
+    msg = await add_fun_table(max_name_len, msg, t)
+
+    # Add Best/Worst Partners Table
+    msg = await add_best_worst_partners_table(max_name_len, msg, t)
+
     # Add Raw Match Table
-    raw_matches = get_raw_match_table(t)
-    matches_lines = []
-    if raw_matches:
-        max_team_len = max(len(m['team1']) for m in raw_matches)
-        for match in raw_matches:
-            matches_lines.append(f"R{match['round']:3} | {match['team1']:<{max_team_len}} | {match['score']:<5} | {match['team2']}")
-        msg += "\n\n📜 История раундов:\n<pre>\n" + "\n".join(matches_lines) + "\n</pre>"
-    
+    msg = await add_raw_match_table(msg, t)
+
+    # Add Final Table (Sorted by points)
+    msg = await add_final_table(max_name_len, msg, t)
+
     if t.stats_msg_id:
         try:
             await context.bot.edit_message_text(chat_id=chat_id, message_id=t.stats_msg_id, text=msg, parse_mode="HTML")
@@ -1155,6 +1247,144 @@ async def finalize_tournament(chat_id, context):
         await asyncio.sleep(e.retry_after)
         await context.bot.send_message(chat_id, "Начать новый турнир?", reply_markup=InlineKeyboardMarkup(keyboard))
 
+async def add_raw_match_table(msg: str, t) -> str:
+    raw_matches = get_raw_match_table(t)
+    matches_lines = []
+    if raw_matches:
+        max_team_len = max(len(m['team1']) for m in raw_matches)
+        for match in raw_matches:
+            matches_lines.append(
+                f"R{match['round']:3} | {match['team1']:<{max_team_len}} | {match['score']:<5} | {match['team2']}")
+        msg += "\n\n📜 История раундов:\n<pre>\n" + "\n".join(matches_lines) + "\n</pre>"
+    return msg
+
+async def add_fun_table(max_name_len: int, msg: str, t) -> str:
+    fun_table = calculate_fun_table(t)
+    fun_lines = []
+    for i, entry in enumerate(fun_table, 1):
+        fun_lines.append(
+            f"{i}. {entry['player']:<{max_name_len}} | Средн. зрелищность: {entry['fun_score']:<5} | Игры: {entry['games']:<2}")
+    msg += "\n\n⚔️ Игроки с самыми зрелищными матчами:\n<pre>\n" + "\n".join(fun_lines) + "\n</pre>"
+    return msg
+
+async def add_fair_table(max_name_len: int, msg: str, t) -> str:
+    fair_table = calculate_fair_table(t)
+    fair_lines = []
+    for i, entry in enumerate(fair_table, 1):
+        medal = "▫️"
+        if i == 1:
+            medal = "🥇"
+        elif i == 2:
+            medal = "🥈"
+        elif i == 3:
+            medal = "🥉"
+        fair_lines.append(
+            f"{medal} {i}. {entry['player']:<{max_name_len}} | Игры: {entry['games']:<2} | П: {entry['wins']:<2} | Н: {entry['draws']:<2} | Пр: {entry['losses']:<2} | Оч: {entry['points']:<3}")
+    msg += "\n\n⚖️ Нормализованные результаты:\n<pre>\n" + "\n".join(fair_lines) + "\n</pre>"
+    return msg
+
+async def add_tense_matches_table(msg: str, t) -> str:
+    """Add the most tense matches to the message"""
+    tense_matches = calculate_tense_matches(t)
+    if not tense_matches:
+        return msg
+
+    tense_lines = []
+    for i, match in enumerate(tense_matches, 1):
+        tension_emoji = "🔥" if match["tension"] > 0 else "❄️"
+        tense_lines.append(
+            f"{i}. R{match['round']} | {match['team1']} vs {match['team2']} | Счёт: {match['score']} {tension_emoji}")
+
+    msg += "\n\n🔥 Самые зрелищные матчи (Топ 3):\n<pre>\n" + "\n".join(tense_lines) + "\n</pre>"
+    return msg
+
+async def add_final_table(max_name_len: int, msg: str, t) -> str:
+    lines = []
+    for i, p in enumerate(t.players, 1):
+        medal = "▫️"
+        if i == 1:
+            medal = "🥇"
+        elif i == 2:
+            medal = "🥈"
+        elif i == 3:
+            medal = "🥉"
+        lines.append(
+            f"{medal} {i}. {p.name:<{max_name_len}} | Игры: {p.games_played:<2} | П: {p.wins:<2} | Н: {p.draws:<2} | Пр: {p.losses:<2} | Оч: {p.points:<3}")
+    msg += f"🏆 {t.name}\n\n📊 Полные результаты (без корректировки игр):\n<pre>\n" + "\n".join(lines) + "\n</pre>"
+    return msg
+
+async def add_best_worst_partners_table(max_name_len: int, msg: str, t) -> str:
+    """Add best and worst partners for each player to the message"""
+    partners = calculate_best_worst_partners(t)
+    if not partners:
+        return msg
+
+    partners_lines = []
+    for player_name in sorted(partners.keys()):
+        info = partners[player_name]
+        best_partner = info["favorite_partner"]
+        best_avg = info["favorite_avg"]
+        worst_partner = info["worst_enemy"]
+        worst_avg = info["worst_enemy_avg"]
+
+        if best_partner and worst_partner:
+            partners_lines.append(
+                f"{player_name:<{max_name_len}}: ❤️ {best_partner:<{max_name_len}} ({best_avg:+.1f}) | 😈 {worst_partner:<{max_name_len}} ({worst_avg:+.1f})")
+
+    if partners_lines:
+        msg += "\n\n🤝 Любимые партнёры и злейшие враги:\n<pre>\n" + "\n".join(partners_lines) + "\n</pre>"
+    return msg
+
+async def add_final_table(max_name_len: int, msg: str, t) -> str:
+    lines = []
+    for i, p in enumerate(t.players, 1):
+        medal = "▫️"
+        if i == 1:
+            medal = "🥇"
+        elif i == 2:
+            medal = "🥈"
+        elif i == 3:
+            medal = "🥉"
+        lines.append(
+            f"{medal} {i}. {p.name:<{max_name_len}} | Игры: {p.games_played:<2} | П: {p.wins:<2} | Н: {p.draws:<2} | Пр: {p.losses:<2} | Оч: {p.points:<3}")
+    msg += f"\n\n🏆 {t.name}\n📊 Полные результаты (без корректировки игр):\n<pre>\n" + "\n".join(lines) + "\n</pre>"
+    return msg
+
+async def remove_buttons_from_standings_message(chat_id, context, t):
+    if t.stats_msg_id:
+        try:
+            await context.bot.edit_message_reply_markup(chat_id=chat_id, message_id=t.stats_msg_id, reply_markup=None)
+        except:
+            pass
+
+async def delete_points_selection_message(chat_id, context):
+    if chat_tournaments[chat_id].get('points_msg_id'):
+        try:
+            await context.bot.delete_message(chat_id, chat_tournaments[chat_id]['points_msg_id'])
+        except:
+            pass
+
+async def delete_round_message(chat_id, context):
+    if chat_tournaments[chat_id].get('round_msg_id'):
+        try:
+            await context.bot.delete_message(chat_id, chat_tournaments[chat_id]['round_msg_id'])
+        except:
+            pass
+
+async def delete_tournament_mode_message(chat_id, context):
+    if chat_tournaments[chat_id].get('tournament_msg_id'):
+        try:
+            await context.bot.delete_message(chat_id, chat_tournaments[chat_id]['tournament_msg_id'])
+        except:
+            pass
+
+async def delete_score_message(chat_id, context):
+    if chat_id in pending_scores and pending_scores[chat_id].get('score_msg_id'):
+        try:
+            await context.bot.delete_message(chat_id, pending_scores[chat_id]['score_msg_id'])
+        except:
+            pass
+
 # -------------------- Run --------------------
 
 async def error_handler(update, context):
@@ -1175,3 +1405,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
