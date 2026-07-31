@@ -2,6 +2,7 @@ from bot.handlers.actions.tournament_actions import next_pair
 from bot.handlers.common import show_standings, show_score_buttons
 from bot.state import pending_management, pending_edit_selection, pending_scores, pending_manual_pair, pending_regenerate_menu
 from bot.tournament import Pair
+from bot.utils.score_helpers import rollback_match, rollback_match_result
 from bot.utils.tournaments_helpers import get_tournament
 
 
@@ -110,29 +111,12 @@ async def edit_round(chat_id, context, data):
             team1 = [p for p in t.players if p.name in team1_names]
             team2 = [p for p in t.players if p.name in team2_names]
 
-            # Rollback games_played
-            for p in team1 + team2:
-                p.games_played -= 1
-
-            # Rollback wins, draws, losses, points
-            if team1_score == team2_score:
-                for p in team1 + team2:
-                    p.draws -= 1
-                    p.points -= team1_score
-            elif team1_score > team2_score:
-                for p in team1:
-                    p.wins -= 1
-                    p.points -= team1_score
-                for p in team2:
-                    p.losses -= 1
-                    p.points -= team2_score
-            else:
-                for p in team1:
-                    p.losses -= 1
-                    p.points -= team1_score
-                for p in team2:
-                    p.wins -= 1
-                    p.points -= team2_score
+            rollback_match(
+                team1,
+                team2,
+                team1_score,
+                team2_score
+            )
 
             # Create pair
             pair = Pair(team1, team2)
@@ -157,24 +141,12 @@ async def set_draw_round(chat_id, context, data):
             team2 = [p for p in t.players if p.name in team2_names]
             score1, score2 = map(int, r['score'].split('-'))
             # Rollback
-            if score1 == score2:
-                for p in team1 + team2:
-                    p.draws -= 1
-                    p.points -= score1
-            elif score1 > score2:
-                for p in team1:
-                    p.wins -= 1
-                    p.points -= score1
-                for p in team2:
-                    p.losses -= 1
-                    p.points -= score2
-            else:
-                for p in team1:
-                    p.losses -= 1
-                    p.points -= score1
-                for p in team2:
-                    p.wins -= 1
-                    p.points -= score2
+            rollback_match_result(
+                team1,
+                team2,
+                score1,
+                score2
+            )
             # Set to draw
             half = t.round_points // 2
             for p in team1 + team2:
@@ -199,24 +171,12 @@ async def set_winner_team(chat_id, context, data):
             winner_team = team1 if team == "team1" else team2
             # Rollback current
             score1, score2 = map(int, r['score'].split('-'))
-            if score1 == score2:
-                for p in team1 + team2:
-                    p.draws -= 1
-                    p.points -= score1
-            elif score1 > score2:
-                for p in team1:
-                    p.wins -= 1
-                    p.points -= score1
-                for p in team2:
-                    p.losses -= 1
-                    p.points -= score2
-            else:
-                for p in team1:
-                    p.losses -= 1
-                    p.points -= score1
-                for p in team2:
-                    p.wins -= 1
-                    p.points -= score2
+            rollback_match_result(
+                team1,
+                team2,
+                score1,
+                score2
+            )
             # Set pending for score
             pair = Pair(team1, team2)
             pending_scores[chat_id] = {'pair': pair, 'winner_team': winner_team, 'edit_index': i,
