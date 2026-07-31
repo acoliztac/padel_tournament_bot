@@ -4,14 +4,16 @@ from datetime import datetime
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.error import RetryAfter
 
-from bot.handlers.common import show_standings, add_final_table, add_raw_match_table, add_best_worst_partners_table, \
-    add_fun_table, add_tense_matches_table, add_fair_table, remove_buttons_from_standings_message, \
-    delete_points_selection_message, delete_round_message, delete_tournament_mode_message, delete_score_message, \
-    show_points_selection, show_tournament_mode, show_player_selection
+from bot.handlers.common import show_standings, show_points_selection, show_tournament_mode, show_player_selection, \
+    delete_score_message
 from bot.state import pending_scores, tournaments, chat_tournaments, anti_spam_msg_ids, pending_edit_selection, \
     pending_manual_pair, pending_player_selection
 from bot.tournament import Tournament, Player
-from bot.utils.telegram_helpers import safe_delete_message, safe_edit_message_text
+from bot.utils.telegram_helpers import safe_delete_message, safe_edit_message_text, \
+    remove_buttons_from_standings_message, delete_points_selection_message, delete_round_message, \
+    delete_tournament_mode_message
+from bot.utils.tournament_reports import add_final_table, add_raw_match_table, add_best_worst_partners_table, \
+    add_fun_table, add_tense_matches_table, add_fair_table
 from bot.utils.tournaments_helpers import get_tournament
 
 
