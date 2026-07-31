@@ -3,35 +3,21 @@ import asyncio
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import RetryAfter
 
-from bot.analytics import (
-    get_raw_match_table,
-    calculate_fair_table,
-    calculate_fun_table,
-    calculate_best_worst_partners,
+from bot.analytics import get_raw_match_table, calculate_fair_table, calculate_fun_table, calculate_best_worst_partners, \
     calculate_tense_matches
-)
-from bot.state import (
-    chat_tournaments,
-    tournaments,
-    anti_spam_msg_ids,
-    pending_scores,
-    pending_manual_pair,
-    pending_edit_selection,
-    players_pool,
-    pending_player_selection,
-    pending_management
-)
+from bot.state import chat_tournaments, anti_spam_msg_ids, pending_scores, pending_manual_pair, pending_edit_selection, \
+    players_pool, pending_player_selection, pending_management
+from bot.utils.telegram_helpers import safe_edit_message_reply_markup, safe_delete_message
+
+from bot.utils.tournaments_helpers import get_tournament
 
 
 async def show_standings(chat_id, context):
     if chat_id in anti_spam_msg_ids:
-        try:
-            await context.bot.delete_message(chat_id, anti_spam_msg_ids[chat_id])
-        except:
-            pass
+        await safe_delete_message(context.bot, chat_id, anti_spam_msg_ids[chat_id])
         del anti_spam_msg_ids[chat_id]
 
-    t = tournaments[chat_tournaments[chat_id]['t_id']]
+    t = get_tournament(chat_id=chat_id)
     t.players.sort(key=lambda p: (-p.points, -p.wins))
 
     max_name_len = max(len(p.name) for p in t.players)
@@ -162,10 +148,7 @@ async def show_standings(chat_id, context):
             await context.bot.edit_message_text(chat_id=chat_id, message_id=t.stats_msg_id, text=msg, parse_mode="HTML",
                                                 reply_markup=InlineKeyboardMarkup(keyboard) if keyboard else None)
         except:
-            try:
-                await context.bot.delete_message(chat_id, t.stats_msg_id)
-            except:
-                pass
+            await safe_delete_message(context.bot, chat_id, t.stats_msg_id)
             try:
                 sent = await context.bot.send_message(chat_id, msg, parse_mode="HTML",
                                                       reply_markup=InlineKeyboardMarkup(keyboard) if keyboard else None)
@@ -186,7 +169,7 @@ async def show_standings(chat_id, context):
 
 
 async def show_score_buttons(chat_id, context, winner_team):
-    t = tournaments[chat_tournaments[chat_id]['t_id']]
+    t = get_tournament(chat_id=chat_id)
     half = t.round_points // 2
     buttons = [InlineKeyboardButton(str(i), callback_data=f"set_score_{i}") for i in
                range(half + 1, t.round_points + 1)]
@@ -250,7 +233,7 @@ async def show_player_selection(query, context, chat_id):
 
 
 async def show_tournament_mode(chat_id, context):
-    t = tournaments[chat_tournaments[chat_id]['t_id']]
+    t = get_tournament(chat_id=chat_id)
     keyboard = [[InlineKeyboardButton("Завершить турнир", callback_data="finish_tournament")]]
     msg_text = "Турнир в процессе..."
 
@@ -377,39 +360,25 @@ async def add_best_worst_partners_table(max_name_len: int, msg: str, t) -> str:
 
 async def remove_buttons_from_standings_message(chat_id, context, t):
     if t.stats_msg_id:
-        try:
-            await context.bot.edit_message_reply_markup(chat_id=chat_id, message_id=t.stats_msg_id, reply_markup=None)
-        except:
-            pass
+        await safe_edit_message_reply_markup(bot=context.bot, chat_id=chat_id, message_id=t.stats_msg_id,
+                                             reply_markup=None)
 
 
 async def delete_points_selection_message(chat_id, context):
     if chat_tournaments[chat_id].get('points_msg_id'):
-        try:
-            await context.bot.delete_message(chat_id, chat_tournaments[chat_id]['points_msg_id'])
-        except:
-            pass
+        await safe_delete_message(context.bot, chat_id, chat_tournaments[chat_id]['points_msg_id'])
 
 
 async def delete_round_message(chat_id, context):
     if chat_tournaments[chat_id].get('round_msg_id'):
-        try:
-            await context.bot.delete_message(chat_id, chat_tournaments[chat_id]['round_msg_id'])
-        except:
-            pass
+        await safe_delete_message(context.bot, chat_id, chat_tournaments[chat_id]['round_msg_id'])
 
 
 async def delete_tournament_mode_message(chat_id, context):
     if chat_tournaments[chat_id].get('tournament_msg_id'):
-        try:
-            await context.bot.delete_message(chat_id, chat_tournaments[chat_id]['tournament_msg_id'])
-        except:
-            pass
+        await safe_delete_message(context.bot, chat_id, chat_tournaments[chat_id]['tournament_msg_id'])
 
 
 async def delete_score_message(chat_id, context):
     if chat_id in pending_scores and pending_scores[chat_id].get('score_msg_id'):
-        try:
-            await context.bot.delete_message(chat_id, pending_scores[chat_id]['score_msg_id'])
-        except:
-            pass
+        await safe_delete_message(context.bot, chat_id, pending_scores[chat_id]['score_msg_id'])

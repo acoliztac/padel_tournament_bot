@@ -4,33 +4,15 @@ from datetime import datetime
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.error import RetryAfter
 
-from bot.handlers.common import (
-    show_standings,
-    add_final_table,
-    add_raw_match_table,
-    add_best_worst_partners_table,
-    add_fun_table,
-    add_tense_matches_table,
-    add_fair_table,
-    remove_buttons_from_standings_message,
-    delete_points_selection_message,
-    delete_round_message,
-    delete_tournament_mode_message,
-    delete_score_message,
-    show_points_selection,
-    show_tournament_mode,
-    show_player_selection
-)
-from bot.state import (
-    pending_scores,
-    tournaments,
-    chat_tournaments,
-    anti_spam_msg_ids,
-    pending_edit_selection,
-    pending_manual_pair,
-    pending_player_selection
-)
+from bot.handlers.common import show_standings, add_final_table, add_raw_match_table, add_best_worst_partners_table, \
+    add_fun_table, add_tense_matches_table, add_fair_table, remove_buttons_from_standings_message, \
+    delete_points_selection_message, delete_round_message, delete_tournament_mode_message, delete_score_message, \
+    show_points_selection, show_tournament_mode, show_player_selection
+from bot.state import pending_scores, tournaments, chat_tournaments, anti_spam_msg_ids, pending_edit_selection, \
+    pending_manual_pair, pending_player_selection
 from bot.tournament import Tournament, Player
+from bot.utils.telegram_helpers import safe_delete_message
+from bot.utils.tournaments_helpers import get_tournament
 
 
 async def create_tournament(chat_id, context):
@@ -56,10 +38,7 @@ async def create_tournament(chat_id, context):
 
     # Delete player selection message
     if players_msg_id:
-        try:
-            await context.bot.delete_message(chat_id, players_msg_id)
-        except:
-            pass
+        await safe_delete_message(context.bot, chat_id, players_msg_id)
 
     if chat_id in pending_player_selection:
         del pending_player_selection[chat_id]
@@ -69,7 +48,7 @@ async def create_tournament(chat_id, context):
 
 
 async def next_pair(chat_id, context):
-    t = tournaments[chat_tournaments[chat_id]['t_id']]
+    t = get_tournament(chat_id=chat_id)
 
     pair = t.select_next_pair()
     if not pair:
@@ -81,7 +60,7 @@ async def next_pair(chat_id, context):
 
 
 async def finalize_tournament(chat_id, context):
-    t = tournaments[chat_tournaments[chat_id]['t_id']]
+    t = get_tournament(chat_id=chat_id)
     t.players.sort(key=lambda p: (-p.points, -p.wins))
 
     # Delete score message
@@ -165,19 +144,16 @@ async def finalize_tournament(chat_id, context):
 async def start_new_tournament(chat_id, query, context):
     pending_player_selection[chat_id] = {'selected': []}
     await show_player_selection(query, context, chat_id)
-    await context.bot.delete_message(chat_id, query.message.message_id)
+    await safe_delete_message(context.bot, chat_id, query.message.message_id)
     return
 
 
 async def set_round_points(chat_id, data, context):
-    t = tournaments[chat_tournaments[chat_id]['t_id']]
+    t = get_tournament(chat_id=chat_id)
     points = int(data.split("_")[-1])
     t.round_points = points
     # Delete points selection message
     if chat_tournaments[chat_id].get('points_msg_id'):
-        try:
-            await context.bot.delete_message(chat_id, chat_tournaments[chat_id]['points_msg_id'])
-        except:
-            pass
+        await safe_delete_message(context.bot, chat_id, chat_tournaments[chat_id]['points_msg_id'])
     await show_standings(chat_id, context)
     await next_pair(chat_id, context)

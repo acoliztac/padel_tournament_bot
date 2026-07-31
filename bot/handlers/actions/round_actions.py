@@ -1,10 +1,12 @@
 from bot.handlers.actions.tournament_actions import next_pair
 from bot.handlers.common import show_standings, show_score_buttons
-from bot.state import pending_scores, tournaments, chat_tournaments
+from bot.state import pending_scores
+from bot.utils.telegram_helpers import safe_edit_message_reply_markup, safe_delete_message
+from bot.utils.tournaments_helpers import get_tournament
 
 
 async def set_score(chat_id, data, context):
-    t = tournaments[chat_tournaments[chat_id]['t_id']]
+    t = get_tournament(chat_id=chat_id)
     score = int(data.split("_")[-1])
     pair = pending_scores[chat_id]['pair']
     winner_team = pending_scores[chat_id]['winner_team']
@@ -55,10 +57,7 @@ async def set_score(chat_id, data, context):
 
     # Delete score message
     if pending_scores[chat_id].get('score_msg_id'):
-        try:
-            await context.bot.delete_message(chat_id, pending_scores[chat_id]['score_msg_id'])
-        except:
-            pass
+        await safe_delete_message(context.bot, chat_id, pending_scores[chat_id]['score_msg_id'])
 
     del pending_scores[chat_id]
     if not is_edit:
@@ -68,7 +67,7 @@ async def set_score(chat_id, data, context):
 
 
 async def result_draw(chat_id, context):
-    t = tournaments[chat_tournaments[chat_id]['t_id']]
+    t = get_tournament(chat_id=chat_id)
     pair = pending_scores[chat_id]['pair']
     half = t.round_points // 2
     pair.score = f"{half}-{half}"
@@ -114,13 +113,7 @@ async def result_team(chat_id, data, context):
 
     # Remove buttons from round message, keep the message
     if pending_scores[chat_id].get('round_msg_id'):
-        try:
-            await context.bot.edit_message_reply_markup(
-                chat_id=chat_id,
-                message_id=pending_scores[chat_id]['round_msg_id'],
-                reply_markup=None
-            )
-        except:
-            pass
+        await safe_edit_message_reply_markup(bot=context.bot, chat_id=chat_id,
+                                             message_id=pending_scores[chat_id]['round_msg_id'], reply_markup=None)
 
     await show_score_buttons(chat_id, context, winner_team)

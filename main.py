@@ -22,6 +22,7 @@ from bot.state import (
     pending_player_selection,
     players_pool
 )
+from bot.utils.telegram_helpers import safe_delete_message
 
 load_dotenv()
 BOT_TOKEN = os.getenv('BOT_TOKEN')
@@ -34,10 +35,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     if chat_id in chat_tournaments:
         await show_tournament_mode(chat_id, context)
-        try:
-            await context.bot.delete_message(chat_id, update.message.message_id)
-        except:
-            pass
+        await safe_delete_message(context.bot, chat_id, update.message.message_id)
         return
 
     pending_player_selection[chat_id] = {'selected': []}

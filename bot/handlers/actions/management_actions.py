@@ -1,8 +1,8 @@
 from bot.handlers.actions.tournament_actions import next_pair
 from bot.handlers.common import show_standings, show_score_buttons
-from bot.state import pending_management, pending_edit_selection, pending_scores, chat_tournaments, tournaments, \
-    pending_manual_pair, pending_regenerate_menu
+from bot.state import pending_management, pending_edit_selection, pending_scores, pending_manual_pair, pending_regenerate_menu
 from bot.tournament import Pair
+from bot.utils.tournaments_helpers import get_tournament
 
 
 async def management(chat_id, context):
@@ -58,7 +58,7 @@ async def remove_from_team(chat_id, context, data):
 
 
 async def confirm_manual_pair(chat_id, context):
-    t = tournaments[chat_tournaments[chat_id]['t_id']]
+    t = get_tournament(chat_id=chat_id)
     team1_names = pending_manual_pair[chat_id]['team1']
     team2_names = pending_manual_pair[chat_id]['team2']
     if len(team1_names) != 2 or len(team2_names) != 2:
@@ -96,7 +96,7 @@ async def edit_rounds(chat_id, context):
 
 
 async def edit_round(chat_id, context, data):
-    t = tournaments[chat_tournaments[chat_id]['t_id']]
+    t = get_tournament(chat_id=chat_id)
     round_num = int(data.split('_')[2])
     for i, r in enumerate(t.round_history):
         if r['round'] == round_num:
@@ -146,7 +146,7 @@ async def edit_round(chat_id, context, data):
 
 
 async def set_draw_round(chat_id, context, data):
-    t = tournaments[chat_tournaments[chat_id]['t_id']]
+    t = get_tournament(chat_id=chat_id)
     round_num = int(data.split("_")[-1])
     for i, r in enumerate(t.round_history):
         if r['round'] == round_num:
@@ -187,7 +187,7 @@ async def set_draw_round(chat_id, context, data):
 
 
 async def set_winner_team(chat_id, context, data):
-    t = tournaments[chat_tournaments[chat_id]['t_id']]
+    t = get_tournament(chat_id=chat_id)
     team = "team1" if "team1" in data else "team2"
     round_num = int(data.split("_")[-1])
     for i, r in enumerate(t.round_history):
