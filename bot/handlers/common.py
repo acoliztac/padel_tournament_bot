@@ -3,10 +3,24 @@ import asyncio
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import RetryAfter
 
-from bot.analytics import get_raw_match_table, calculate_fair_table, calculate_fun_table, calculate_best_worst_partners, \
+from bot.analytics import (
+    get_raw_match_table,
+    calculate_fair_table,
+    calculate_fun_table,
+    calculate_best_worst_partners,
     calculate_tense_matches
-from bot.state import chat_tournaments, tournaments, anti_spam_msg_ids, pending_scores, pending_manual_pair, \
-    pending_edit_selection, players_pool, pending_player_selection, pending_management
+)
+from bot.state import (
+    chat_tournaments,
+    tournaments,
+    anti_spam_msg_ids,
+    pending_scores,
+    pending_manual_pair,
+    pending_edit_selection,
+    players_pool,
+    pending_player_selection,
+    pending_management
+)
 
 
 async def show_standings(chat_id, context):
@@ -171,23 +185,12 @@ async def show_standings(chat_id, context):
         t.stats_msg_id = sent.message_id
 
 
-async def next_pair(chat_id, context):
-    t = tournaments[chat_tournaments[chat_id]['t_id']]
-
-    pair = t.select_next_pair()
-    if not pair:
-        await context.bot.send_message(chat_id, "Ожидание 4 игроков...")
-        await show_standings(chat_id, context)
-        return
-    pending_scores[chat_id] = {'pair': pair}
-    await show_standings(chat_id, context)
-
-
 async def show_score_buttons(chat_id, context, winner_team):
     t = tournaments[chat_tournaments[chat_id]['t_id']]
     half = t.round_points // 2
-    buttons = [InlineKeyboardButton(str(i), callback_data=f"set_score_{i}") for i in range(half + 1, t.round_points + 1)]
-    keyboard = [buttons[i:i+4] for i in range(0, len(buttons), 4)]  # 4 buttons per row
+    buttons = [InlineKeyboardButton(str(i), callback_data=f"set_score_{i}") for i in
+               range(half + 1, t.round_points + 1)]
+    keyboard = [buttons[i:i + 4] for i in range(0, len(buttons), 4)]  # 4 buttons per row
     msg_text = f"Выигравшая команда:\n{' & '.join(p.name for p in winner_team)}\nВыберите счёт:"
     try:
         sent = await context.bot.send_message(chat_id, msg_text, reply_markup=InlineKeyboardMarkup(keyboard))
@@ -203,7 +206,7 @@ async def show_score_buttons(chat_id, context, winner_team):
         pending_scores[chat_id]['score_msg_id'] = sent.message_id
 
 
-async def show_player_selection(update, context, chat_id):
+async def show_player_selection(query, context, chat_id):
     selected = pending_player_selection[chat_id]['selected']
 
     keyboard = []
@@ -234,8 +237,8 @@ async def show_player_selection(update, context, chat_id):
             text=msg_text,
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
-    elif update.message:
-        sent_msg = await update.message.reply_text(msg_text, reply_markup=InlineKeyboardMarkup(keyboard))
+    elif query.message:
+        sent_msg = await query.message.reply_text(msg_text, reply_markup=InlineKeyboardMarkup(keyboard))
         if chat_id not in chat_tournaments:
             chat_tournaments[chat_id] = {}
         chat_tournaments[chat_id]['players_msg_id'] = sent_msg.message_id
@@ -244,87 +247,6 @@ async def show_player_selection(update, context, chat_id):
         if chat_id not in chat_tournaments:
             chat_tournaments[chat_id] = {}
         chat_tournaments[chat_id]['players_msg_id'] = sent_msg.message_id
-
-async def finalize_tournament(chat_id, context):
-    t = tournaments[chat_tournaments[chat_id]['t_id']]
-    t.players.sort(key=lambda p: (-p.points, -p.wins))
-
-    # Delete score message
-    await delete_score_message(chat_id, context)
-
-    # Delete tournament mode message
-    await delete_tournament_mode_message(chat_id, context)
-
-    # Delete round message
-    await delete_round_message(chat_id, context)
-
-    # Delete points selection message
-    await delete_points_selection_message(chat_id, context)
-
-    # Remove buttons from standings message
-    await remove_buttons_from_standings_message(chat_id, context, t)
-
-    # Show final standings without buttons
-    max_name_len = max(len(p.name) for p in t.players)
-
-    msg = ""
-
-    # Add Fair Table (Normalized Games)
-    msg = await add_fair_table(max_name_len, msg, t)
-
-    # Add Tense Matches Table (Top 5 most intense matches)
-    msg = await add_tense_matches_table(msg, t)
-
-    # Add Fun Table (Match Interestingness)
-    msg = await add_fun_table(max_name_len, msg, t)
-
-    # Add Best/Worst Partners Table
-    msg = await add_best_worst_partners_table(max_name_len, msg, t)
-
-    # Add Raw Match Table
-    msg = await add_raw_match_table(msg, t)
-
-    # Add Final Table (Sorted by points)
-    msg = await add_final_table(max_name_len, msg, t)
-
-    if t.stats_msg_id:
-        try:
-            await context.bot.edit_message_text(chat_id=chat_id, message_id=t.stats_msg_id, text=msg, parse_mode="HTML")
-        except RetryAfter as e:
-            await asyncio.sleep(e.retry_after)
-            await context.bot.edit_message_text(chat_id=chat_id, message_id=t.stats_msg_id, text=msg, parse_mode="HTML")
-        except:
-            pass  # If edit fails, just proceed
-    else:
-        try:
-            await context.bot.send_message(chat_id, msg, parse_mode="HTML")
-        except RetryAfter as e:
-            await asyncio.sleep(e.retry_after)
-            await context.bot.send_message(chat_id, msg, parse_mode="HTML")
-
-    # Clear old tournament
-    t_id = t.id
-    del tournaments[t_id]
-    del chat_tournaments[chat_id]
-    if chat_id in pending_scores:
-        del pending_scores[chat_id]
-    if chat_id in pending_manual_pair:
-        del pending_manual_pair[chat_id]
-    if chat_id in pending_edit_selection:
-        del pending_edit_selection[chat_id]
-
-    # --- Start new tournament button ---
-    keyboard = [[InlineKeyboardButton("Начать новый турнир", callback_data="start_new_tournament")]]
-    try:
-        await context.bot.send_message(chat_id, "Начать новый турнир?", reply_markup=InlineKeyboardMarkup(keyboard))
-    except RetryAfter as e:
-        try:
-            sent_anti = await context.bot.send_message(chat_id, f"Антиспам сработал, ждем {e.retry_after} секунд...")
-            anti_spam_msg_ids[chat_id] = sent_anti.message_id
-        except:
-            pass
-        await asyncio.sleep(e.retry_after)
-        await context.bot.send_message(chat_id, "Начать новый турнир?", reply_markup=InlineKeyboardMarkup(keyboard))
 
 
 async def show_tournament_mode(chat_id, context):
@@ -354,17 +276,9 @@ async def show_points_selection(chat_id, context):
         InlineKeyboardButton("24", callback_data="set_round_points_24"),
         InlineKeyboardButton("32", callback_data="set_round_points_32")
     ]]
-    sent = await context.bot.send_message(chat_id, "Выберите количество очков за раунд:", reply_markup=InlineKeyboardMarkup(keyboard))
+    sent = await context.bot.send_message(chat_id, "Выберите количество очков за раунд:",
+                                          reply_markup=InlineKeyboardMarkup(keyboard))
     chat_tournaments[chat_id]['points_msg_id'] = sent.message_id
-
-
-
-
-
-
-
-
-
 
 
 async def add_final_table(max_name_len: int, msg: str, t) -> str:
@@ -382,6 +296,7 @@ async def add_final_table(max_name_len: int, msg: str, t) -> str:
     msg += f"\n\n🏆 {t.name}\n📊 Полные результаты (без корректировки игр):\n<pre>\n" + "\n".join(lines) + "\n</pre>"
     return msg
 
+
 async def add_raw_match_table(msg: str, t) -> str:
     raw_matches = get_raw_match_table(t)
     matches_lines = []
@@ -393,6 +308,7 @@ async def add_raw_match_table(msg: str, t) -> str:
         msg += "\n\n📜 История раундов:\n<pre>\n" + "\n".join(matches_lines) + "\n</pre>"
     return msg
 
+
 async def add_fun_table(max_name_len: int, msg: str, t) -> str:
     fun_table = calculate_fun_table(t)
     fun_lines = []
@@ -401,6 +317,7 @@ async def add_fun_table(max_name_len: int, msg: str, t) -> str:
             f"{i}. {entry['player']:<{max_name_len}} | Средн. зрелищность: {entry['fun_score']:<5} | Игры: {entry['games']:<2}")
     msg += "\n\n⚔️ Игроки с самыми зрелищными матчами:\n<pre>\n" + "\n".join(fun_lines) + "\n</pre>"
     return msg
+
 
 async def add_fair_table(max_name_len: int, msg: str, t) -> str:
     fair_table = calculate_fair_table(t)
@@ -418,6 +335,7 @@ async def add_fair_table(max_name_len: int, msg: str, t) -> str:
     msg += "\n\n⚖️ Нормализованные результаты:\n<pre>\n" + "\n".join(fair_lines) + "\n</pre>"
     return msg
 
+
 async def add_tense_matches_table(msg: str, t) -> str:
     """Add the most tense matches to the message"""
     tense_matches = calculate_tense_matches(t)
@@ -432,6 +350,7 @@ async def add_tense_matches_table(msg: str, t) -> str:
 
     msg += "\n\n🔥 Самые зрелищные матчи (Топ 3):\n<pre>\n" + "\n".join(tense_lines) + "\n</pre>"
     return msg
+
 
 async def add_best_worst_partners_table(max_name_len: int, msg: str, t) -> str:
     """Add best and worst partners for each player to the message"""
@@ -455,12 +374,14 @@ async def add_best_worst_partners_table(max_name_len: int, msg: str, t) -> str:
         msg += "\n\n🤝 Любимые партнёры и злейшие враги:\n<pre>\n" + "\n".join(partners_lines) + "\n</pre>"
     return msg
 
+
 async def remove_buttons_from_standings_message(chat_id, context, t):
     if t.stats_msg_id:
         try:
             await context.bot.edit_message_reply_markup(chat_id=chat_id, message_id=t.stats_msg_id, reply_markup=None)
         except:
             pass
+
 
 async def delete_points_selection_message(chat_id, context):
     if chat_tournaments[chat_id].get('points_msg_id'):
@@ -469,6 +390,7 @@ async def delete_points_selection_message(chat_id, context):
         except:
             pass
 
+
 async def delete_round_message(chat_id, context):
     if chat_tournaments[chat_id].get('round_msg_id'):
         try:
@@ -476,12 +398,14 @@ async def delete_round_message(chat_id, context):
         except:
             pass
 
+
 async def delete_tournament_mode_message(chat_id, context):
     if chat_tournaments[chat_id].get('tournament_msg_id'):
         try:
             await context.bot.delete_message(chat_id, chat_tournaments[chat_id]['tournament_msg_id'])
         except:
             pass
+
 
 async def delete_score_message(chat_id, context):
     if chat_id in pending_scores and pending_scores[chat_id].get('score_msg_id'):
