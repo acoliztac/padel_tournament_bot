@@ -1,6 +1,4 @@
 import os
-import uuid
-import random
 import asyncio
 from collections import defaultdict
 from datetime import datetime
@@ -8,6 +6,9 @@ from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ForceReply
 from telegram.error import RetryAfter
 from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQueryHandler, MessageHandler, filters
+
+from bot.tournament import Player, Pair, Tournament
+
 import logging
 
 load_dotenv()
@@ -308,61 +309,6 @@ def get_raw_match_table(tournament):
     
     return matches
 
-# -------------------- Classes --------------------
-
-class Player:
-    def __init__(self, name):
-        self.name = name
-        self.games_played = 0
-        self.wins = 0
-        self.draws = 0
-        self.losses = 0
-        self.points = 0
-        self.current_pair = None
-
-class Pair:
-    def __init__(self, team1, team2):
-        self.team1 = team1
-        self.team2 = team2
-        self.score = None
-
-class Tournament:
-    def __init__(self, name):
-        self.id = str(uuid.uuid4())[:8]
-        self.name = name
-        self.players = []
-        self.round = 1
-        self.round_history = []
-        self.stats_msg_id = None
-        self.round_points = None
-
-    def add_player(self, player):
-        self.players.append(player)
-
-    # -------------------- Mexicano 1+4 vs 2+3 --------------------
-    def select_next_pair(self):
-        if len(self.players) < 4:
-            return None
-
-        # 4 players with the least number of games
-        available_players = sorted(self.players, key=lambda p: (p.games_played, random.random()))
-        selected = available_players[:4]
-
-        # Sort by points: p1=max, p2>=p3, p4=min
-        sorted_players = sorted(selected, key=lambda p: p.points, reverse=True)
-        p1, p2, p3, p4 = sorted_players
-
-        team1 = [p1, p4]
-        team2 = [p2, p3]
-        pair = Pair(team1, team2)
-        for p in team1 + team2:
-            p.current_pair = pair
-        return pair
-
-    def will_round_equalize_games(self, selected_players):
-        # Check if all players will have the same games_played after the current round
-        after_games = [p.games_played + (1 if p in selected_players else 0) for p in self.players]
-        return len(set(after_games)) == 1
 
 # -------------------- Storage --------------------
 
@@ -602,7 +548,7 @@ async def handle_callback(update, context):
         await finalize_tournament(chat_id, context)
 
     elif data == "edit_last_round":
-        if t.round > 1:
+        if t.current_round > 1:
             # Rollback last round statistics
             last_round = t.round_history[-1]
             team1_names = last_round["team1"]
@@ -704,7 +650,7 @@ async def handle_callback(update, context):
             }
         else:
             t.round_history.append({
-                "round": t.round,
+                "round": t.current_round,
                 "team1": [p.name for p in pair.team1],
                 "team2": [p.name for p in pair.team2],
                 "score": pair.score
@@ -712,7 +658,7 @@ async def handle_callback(update, context):
 
         del pending_scores[chat_id]
         if not is_edit:
-            t.round += 1
+            t.current_round += 1
         await show_standings(chat_id, context)
         await next_pair(chat_id, context)
 
@@ -777,7 +723,7 @@ async def handle_callback(update, context):
             }
         else:
             t.round_history.append({
-                "round": t.round,
+                "round": t.current_round,
                 "team1": [p.name for p in pair.team1],
                 "team2": [p.name for p in pair.team2],
                 "score": pair.score
@@ -792,7 +738,7 @@ async def handle_callback(update, context):
 
         del pending_scores[chat_id]
         if not is_edit:
-            t.round += 1
+            t.current_round += 1
         await show_standings(chat_id, context)
         await next_pair(chat_id, context)
 
@@ -1055,10 +1001,10 @@ async def show_standings(chat_id, context):
     if chat_id in pending_scores:
         pair = pending_scores[chat_id]['pair']
         if pending_scores[chat_id].get('edit'):
-            round_num = pending_scores[chat_id].get('edit_round', t.round - 1)
+            round_num = pending_scores[chat_id].get('edit_round', t.current_round - 1)
             msg_prefix = f"Редактировать раунд {round_num}"
         else:
-            round_num = t.round
+            round_num = t.current_round
             msg_prefix = f"🏓 Раунд {round_num}"
         equal_games = t.will_round_equalize_games(pair.team1 + pair.team2)
         equal_icon = "⚖️" if equal_games else ""
@@ -1104,7 +1050,7 @@ async def show_standings(chat_id, context):
     if chat_id in pending_manual_pair:
         team1 = pending_manual_pair[chat_id]['team1']
         team2 = pending_manual_pair[chat_id]['team2']
-        round_num = t.round
+        round_num = t.current_round
         msg = f"Ручная генерация команд для Раунда {round_num}:\n"
         msg += f"Команда 1: {', '.join(team1) if team1 else 'Пусто'}\n"
         msg += f"Команда 2: {', '.join(team2) if team2 else 'Пусто'}\n\n"
