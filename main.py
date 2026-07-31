@@ -1113,8 +1113,8 @@ async def show_standings(chat_id, context):
         available_players = [p.name for p in t.players if p.name not in team1 and p.name not in team2]
         for player in available_players:
             keyboard.append([
-                InlineKeyboardButton(f"➕ В Команду 1: {player}", callback_data=f"add_to_team1_{player}"),
-                InlineKeyboardButton(f"➕ В Команду 2: {player}", callback_data=f"add_to_team2_{player}")
+                InlineKeyboardButton(f"➕ 1: {player}", callback_data=f"add_to_team1_{player}"),
+                InlineKeyboardButton(f"➕ 2: {player}", callback_data=f"add_to_team2_{player}")
             ])
         # Кнопки для удаления
         for player in team1 + team2:
