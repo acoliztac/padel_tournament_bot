@@ -1,6 +1,6 @@
 from bot.state import pending_scores
 from bot.utils.score_helpers import apply_win, apply_draw
-from bot.utils.telegram_helpers import safe_delete_message, safe_edit_message_reply_markup
+from bot.utils.telegram_helpers import safe_edit_message_reply_markup, safe_delete_score_message
 from bot.utils.tournaments_helpers import get_tournament
 
 
@@ -69,8 +69,7 @@ async def apply_result(chat_id, context, score):
         t.round_history.append(record)
 
     # Cleanup
-    if data.get('score_msg_id'):
-        await safe_delete_message(context.bot, chat_id, data['score_msg_id'])
+    await safe_delete_score_message(chat_id, context)
 
     del pending_scores[chat_id]
 

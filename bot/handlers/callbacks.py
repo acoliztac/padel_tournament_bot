@@ -4,7 +4,7 @@ from bot.handlers.actions.management_actions import cancel_manual_pair, reset_ma
 from bot.handlers.actions.player_actions import deselect_player, select_player, confirm_delete, delete_player, \
     select_all_players, add_new_player
 from bot.handlers.actions.round_actions import set_score, set_draw, result_team
-from bot.handlers.actions.tournament_actions import set_round_points, finalize_tournament, start_new_tournament, \
+from bot.handlers.actions.tournament_actions import set_round_points, finalize_tournament, begin_tournament_setup, \
     create_tournament
 from bot.ui.views import show_player_selection
 from bot.state import chat_tournaments
@@ -19,7 +19,7 @@ async def handle_callback(update, context):
     if chat_id not in chat_tournaments:
         allowed_without_tournament = {
             "create_tournament",
-            "start_new_tournament",
+            "begin_tournament_setup",
         }
 
         if data not in allowed_without_tournament:
@@ -28,8 +28,8 @@ async def handle_callback(update, context):
     if data == "create_tournament":
         await create_tournament(chat_id=chat_id, context=context)
 
-    elif data == "start_new_tournament":
-        await start_new_tournament(chat_id=chat_id, query=query, context=context)
+    elif data == "begin_tournament_setup":
+        await begin_tournament_setup(chat_id=chat_id, query=query, context=context)
 
     elif data == "add_new_player":
         await add_new_player(chat_id=chat_id, context=context)

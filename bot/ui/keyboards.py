@@ -73,6 +73,14 @@ def round_result_keyboard():
     ])
 
 
+def begin_tournament_setup_keyboard():
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("Начать новый турнир", callback_data="begin_tournament_setup")
+        ]
+    ])
+
+
 def score_keyboard(round_points):
     half = round_points // 2
 

@@ -2,7 +2,7 @@ from bot.analytics import calculate_best_worst_partners, calculate_tense_matches
     calculate_fair_table, get_raw_match_table
 
 
-async def add_final_table(max_name_len: int, msg: str, t) -> str:
+def add_final_table(max_name_len: int, msg: str, t) -> str:
     lines = []
     for i, p in enumerate(t.players, 1):
         medal = "▫️"
@@ -18,7 +18,7 @@ async def add_final_table(max_name_len: int, msg: str, t) -> str:
     return msg
 
 
-async def add_raw_match_table(msg: str, t) -> str:
+def add_raw_match_table(msg: str, t) -> str:
     raw_matches = get_raw_match_table(t)
     matches_lines = []
     if raw_matches:
@@ -30,7 +30,7 @@ async def add_raw_match_table(msg: str, t) -> str:
     return msg
 
 
-async def add_fun_table(max_name_len: int, msg: str, t) -> str:
+def add_fun_table(max_name_len: int, msg: str, t) -> str:
     fun_table = calculate_fun_table(t)
     fun_lines = []
     for i, entry in enumerate(fun_table, 1):
@@ -40,7 +40,7 @@ async def add_fun_table(max_name_len: int, msg: str, t) -> str:
     return msg
 
 
-async def add_fair_table(max_name_len: int, msg: str, t) -> str:
+def add_fair_table(max_name_len: int, msg: str, t) -> str:
     fair_table = calculate_fair_table(t)
     fair_lines = []
     for i, entry in enumerate(fair_table, 1):
@@ -57,7 +57,7 @@ async def add_fair_table(max_name_len: int, msg: str, t) -> str:
     return msg
 
 
-async def add_tense_matches_table(msg: str, t) -> str:
+def add_tense_matches_table(msg: str, t) -> str:
     """Add the most tense matches to the message"""
     tense_matches = calculate_tense_matches(t)
     if not tense_matches:
@@ -73,7 +73,7 @@ async def add_tense_matches_table(msg: str, t) -> str:
     return msg
 
 
-async def add_best_worst_partners_table(max_name_len: int, msg: str, t) -> str:
+def add_best_worst_partners_table(max_name_len: int, msg: str, t) -> str:
     """Add best and worst partners for each player to the message"""
     partners = calculate_best_worst_partners(t)
     if not partners:
