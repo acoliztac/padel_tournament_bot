@@ -7,7 +7,6 @@ pending_new_player = {}
 pending_player_selection = {}
 pending_edit_selection = {}
 pending_manual_pair = {}
-pending_regenerate_menu = {}
 pending_management = {}
 
 # Global player pool

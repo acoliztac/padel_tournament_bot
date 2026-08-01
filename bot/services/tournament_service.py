@@ -1,7 +1,8 @@
 from datetime import datetime
 
-from bot.state import tournaments, chat_tournaments, pending_scores, pending_manual_pair, pending_edit_selection
+from bot.state import tournaments, chat_tournaments, pending_scores
 from bot.tournament import Tournament, Player
+from bot.utils.state_helpers import clear_management_state, clear_active_round_state
 from bot.utils.tournaments_helpers import get_tournament
 
 
@@ -37,9 +38,8 @@ def finalize_tournament_service(chat_id):
 
     tournaments.pop(t.id, None)
 
-    pending_scores.pop(chat_id, None)
-    pending_manual_pair.pop(chat_id, None)
-    pending_edit_selection.pop(chat_id, None)
+    clear_management_state(chat_id)
+    clear_active_round_state(chat_id)
 
     return t
 

@@ -1,7 +1,42 @@
 from bot.state import pending_scores
-from bot.utils.score_helpers import apply_win, apply_draw
+from bot.tournament import Pair
+from bot.utils.score_helpers import apply_win, apply_draw, rollback_match, rollback_match_result
 from bot.utils.telegram_helpers import safe_edit_message_reply_markup, safe_delete_score_message
 from bot.utils.tournaments_helpers import get_tournament
+
+
+def prepare_round_edit(chat_id, round_num):
+    tournament = get_tournament(chat_id=chat_id)
+
+    for index, round_data in enumerate(tournament.round_history):
+        if round_data["round"] != round_num:
+            continue
+
+        team1_names = round_data["team1"]
+        team2_names = round_data["team2"]
+
+        score1, score2 = map(int, round_data["score"].split("-"))
+
+        players_by_name = {player.name: player for player in tournament.players}
+
+        try:
+            team1 = [players_by_name[name] for name in team1_names]
+            team2 = [players_by_name[name] for name in team2_names]
+        except KeyError:
+            return None
+
+        rollback_match(team1, team2, score1, score2, )
+
+        pair = tournament.create_pair(team1, team2)
+
+        return {
+            "pair": pair,
+            "edit": True,
+            "edit_index": index,
+            "edit_round": round_num,
+        }
+
+    return None
 
 
 async def apply_result(chat_id, context, score):
@@ -87,3 +122,103 @@ async def apply_result_team(chat_id, context, data):
         await safe_edit_message_reply_markup(bot=context.bot, chat_id=chat_id,
                                              message_id=pending_scores[chat_id]['round_msg_id'], reply_markup=None)
     return winner_team
+
+
+def prepare_round_result_change(chat_id, round_num):
+    """
+    Находит завершённый раунд и откатывает его текущий результат.
+
+    Возвращает данные раунда, необходимые для установки
+    нового результата, или None, если раунд не найден.
+    """
+
+    tournament = get_tournament(chat_id=chat_id)
+
+    players_by_name = {player.name: player for player in tournament.players}
+
+    for index, round_data in enumerate(tournament.round_history):
+        if round_data["round"] != round_num:
+            continue
+
+        try:
+            team1 = [players_by_name[name] for name in round_data["team1"]]
+            team2 = [players_by_name[name] for name in round_data["team2"]]
+        except KeyError:
+            return None
+
+        score1, score2 = map(int, round_data["score"].split("-"), )
+
+        rollback_match_result(team1=team1, team2=team2, score1=score1, score2=score2)
+
+        return {
+            "tournament": tournament,
+            "index": index,
+            "round_data": round_data,
+            "team1": team1,
+            "team2": team2,
+        }
+
+    return None
+
+
+def set_round_draw_service(chat_id, round_num):
+    """
+    Изменяет результат завершённого раунда на ничью.
+    """
+
+    result_data = prepare_round_result_change(chat_id=chat_id, round_num=round_num, )
+
+    if result_data is None:
+        return False
+
+    tournament = result_data["tournament"]
+    index = result_data["index"]
+    round_data = result_data["round_data"]
+
+    team1 = result_data["team1"]
+    team2 = result_data["team2"]
+
+    half = tournament.round_points // 2
+
+    apply_draw(team1=team1, team2=team2, points=half)
+
+    round_data["score"] = f"{half}-{half}"
+    tournament.round_history[index] = round_data
+
+    return True
+
+
+def prepare_round_winner_change(
+        chat_id,
+        round_num,
+        winner_side,
+):
+    """
+    Подготавливает завершённый раунд к выбору нового счёта.
+
+    Старый результат откатывается.
+    Новый результат будет применён позже через apply_result().
+    """
+
+    result_data = prepare_round_result_change(chat_id=chat_id, round_num=round_num,)
+
+    if result_data is None:
+        return None
+
+    tournament = result_data["tournament"]
+    index = result_data["index"]
+
+    team1 = result_data["team1"]
+    team2 = result_data["team2"]
+
+    pair = tournament.create_pair(team1=team1, team2=team2,)
+
+    winner_team = (team1 if winner_side == "team1" else team2)
+
+    return {
+        "pair": pair,
+        "winner_team": winner_team,
+        "edit": True,
+        "edit_index": index,
+        "edit_round": round_num,
+    }
