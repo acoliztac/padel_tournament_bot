@@ -1,5 +1,5 @@
 from bot.handlers.actions.tournament_actions import next_pair
-from bot.handlers.common import show_standings, show_score_buttons
+from bot.ui.views import show_standings, show_score_buttons
 from bot.state import pending_management, pending_edit_selection, pending_scores, pending_manual_pair, pending_regenerate_menu
 from bot.tournament import Pair
 from bot.utils.score_helpers import rollback_match, rollback_match_result

@@ -4,7 +4,7 @@ from datetime import datetime
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.error import RetryAfter
 
-from bot.handlers.common import show_standings, show_points_selection, show_tournament_mode, show_player_selection, \
+from bot.ui.views import show_standings, show_points_selection, show_tournament_mode, show_player_selection, \
     delete_score_message
 from bot.state import pending_scores, tournaments, chat_tournaments, anti_spam_msg_ids, pending_edit_selection, \
     pending_manual_pair, pending_player_selection

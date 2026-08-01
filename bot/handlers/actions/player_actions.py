@@ -1,6 +1,6 @@
 from telegram import ForceReply
 
-from bot.handlers.common import show_player_selection
+from bot.ui.views import show_player_selection
 from bot.state import pending_player_selection, players_pool, pending_new_player
 
 

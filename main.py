@@ -13,15 +13,10 @@ from telegram.ext import (
 )
 
 from bot.handlers.callbacks import handle_callback
-from bot.handlers.common import show_player_selection, show_tournament_mode
 from bot.handlers.errors import error_handler
 from bot.handlers.messages import handle_message
-from bot.state import (
-    chat_tournaments,
-    pending_new_player,
-    pending_player_selection,
-    players_pool
-)
+from bot.state import chat_tournaments, pending_new_player, pending_player_selection, players_pool
+from bot.ui.views import show_player_selection, show_tournament_mode
 from bot.utils.telegram_helpers import safe_delete_message
 
 load_dotenv()

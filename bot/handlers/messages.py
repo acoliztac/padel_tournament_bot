@@ -1,4 +1,4 @@
-from bot.handlers.common import show_player_selection
+from bot.ui.views import show_player_selection
 from bot.state import pending_new_player, players_pool
 
 

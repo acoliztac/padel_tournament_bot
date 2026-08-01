@@ -1,5 +1,5 @@
 from bot.handlers.actions.tournament_actions import next_pair
-from bot.handlers.common import show_standings, show_score_buttons
+from bot.ui.views import show_standings, show_score_buttons
 from bot.state import pending_scores
 from bot.utils.score_helpers import apply_win, apply_draw
 from bot.utils.telegram_helpers import safe_edit_message_reply_markup, safe_delete_message

@@ -6,9 +6,7 @@ from bot.handlers.actions.player_actions import deselect_player, select_player, 
 from bot.handlers.actions.round_actions import set_score, set_draw, result_team
 from bot.handlers.actions.tournament_actions import set_round_points, finalize_tournament, start_new_tournament, \
     create_tournament
-from bot.handlers.common import (
-    show_player_selection,
-)
+from bot.ui.views import show_player_selection
 from bot.state import chat_tournaments
 
 
