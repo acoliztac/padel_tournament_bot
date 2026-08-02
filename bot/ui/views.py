@@ -118,8 +118,8 @@ async def show_standings(chat_id, context):
 
     if chat_id in pending_management:
         keyboard = management_keyboard(bool(t.round_history))
-        edited = await safe_edit_message_text(chat_id=chat_id, message_id=t.stats_msg_id, text=msg, parse_mode="HTML",
-                                              reply_markup=keyboard)
+        edited = await safe_edit_message_text(bot=context.bot, chat_id=chat_id, message_id=t.stats_msg_id, text=msg,
+                                              parse_mode="HTML", reply_markup=keyboard)
         if not edited:
             sent = await context.bot.send_message(chat_id, msg, parse_mode="HTML", reply_markup=keyboard)
             t.stats_msg_id = sent.message_id
@@ -135,8 +135,8 @@ async def show_standings(chat_id, context):
         msg += "Выберите игроков:"
 
         keyboard = manual_pair_keyboard(players=t.players, team1=team1, team2=team2)
-        edited = await safe_edit_message_text(chat_id=chat_id, message_id=t.stats_msg_id, text=msg, parse_mode="HTML",
-                                              reply_markup=keyboard)
+        edited = await safe_edit_message_text(bot=context.bot, chat_id=chat_id, message_id=t.stats_msg_id, text=msg,
+                                              parse_mode="HTML", reply_markup=keyboard)
         if not edited:
             sent = await context.bot.send_message(chat_id, msg, parse_mode="HTML", reply_markup=keyboard)
             t.stats_msg_id = sent.message_id
@@ -253,7 +253,7 @@ async def show_final_report(chat_id, context, text, message_id=None):
             await context.bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=text, parse_mode="HTML")
         except RetryAfter as e:
             await asyncio.sleep(e.retry_after)
-            await safe_edit_message_text(context.bot, chat_id, message_id, text, parse_mode="HTML")
+            await safe_edit_message_text(bot=context.bot, chat_id=chat_id, message_id=message_id, text=text, parse_mode="HTML")
         except TelegramError:
             pass  # If edit fails, just proceed
     else:
