@@ -8,7 +8,7 @@ from bot.utils.tournaments_helpers import get_tournament
 
 def create_tournament_service(chat_id, selected):
     # Generate tournament name
-    date_str = datetime.now().strftime("%Y-%m-%d")
+    date_str = datetime.now().astimezone().strftime("%Y-%m-%d")
     player_count = len(selected)
     name = f"{date_str}_Mexicano_{player_count}players"
 
