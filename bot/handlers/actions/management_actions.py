@@ -1,7 +1,7 @@
 from bot.handlers.actions.tournament_actions import next_pair
-from bot.services.round_service import prepare_round_edit, set_round_draw_service, prepare_round_winner_change
-from bot.state import pending_management, pending_edit_selection, pending_scores, pending_manual_pair
-from bot.ui.views import show_standings, show_score_buttons
+from bot.services.round_service import prepare_round_edit, prepare_round_winner_change, set_round_draw_service
+from bot.state import pending_edit_selection, pending_management, pending_manual_pair, pending_scores
+from bot.ui.views import show_score_buttons, show_standings
 from bot.utils.state_helpers import clear_management_state
 from bot.utils.tournaments_helpers import get_tournament
 
@@ -14,14 +14,12 @@ async def management(chat_id, context):
 async def regenerate_auto(chat_id, context):
     clear_management_state(chat_id)
     await next_pair(chat_id, context)
-    return
 
 
 async def regenerate_manual(chat_id, context):
     clear_management_state(chat_id)
     pending_manual_pair[chat_id] = {'team1': [], 'team2': []}
     await show_standings(chat_id, context)
-    return
 
 
 async def add_to_team1(chat_id, context, data):
@@ -29,7 +27,6 @@ async def add_to_team1(chat_id, context, data):
     if player not in pending_manual_pair[chat_id]['team1'] and player not in pending_manual_pair[chat_id]['team2']:
         pending_manual_pair[chat_id]['team1'].append(player)
     await show_standings(chat_id, context)
-    return
 
 
 async def add_to_team2(chat_id, context, data):
@@ -37,7 +34,6 @@ async def add_to_team2(chat_id, context, data):
     if player not in pending_manual_pair[chat_id]['team1'] and player not in pending_manual_pair[chat_id]['team2']:
         pending_manual_pair[chat_id]['team2'].append(player)
     await show_standings(chat_id, context)
-    return
 
 
 async def remove_from_team(chat_id, context, data):
@@ -47,7 +43,6 @@ async def remove_from_team(chat_id, context, data):
     elif player in pending_manual_pair[chat_id]['team2']:
         pending_manual_pair[chat_id]['team2'].remove(player)
     await show_standings(chat_id, context)
-    return
 
 
 async def confirm_manual_pair(chat_id, context):
@@ -73,13 +68,11 @@ async def confirm_manual_pair(chat_id, context):
 async def reset_manual_pair(chat_id, context):
     pending_manual_pair[chat_id] = {'team1': [], 'team2': []}
     await show_standings(chat_id, context)
-    return
 
 
 async def cancel_manual_pair(chat_id, context):
     clear_management_state(chat_id)
     await show_standings(chat_id, context)
-    return
 
 
 async def edit_rounds(chat_id, context):

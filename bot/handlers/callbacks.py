@@ -1,13 +1,36 @@
-from bot.handlers.actions.management_actions import cancel_manual_pair, reset_manual_pair, confirm_manual_pair, \
-    remove_from_team, add_to_team2, add_to_team1, regenerate_manual, regenerate_auto, management, edit_rounds, \
-    back_to_standings, set_winner_team, set_draw_round, edit_round
-from bot.handlers.actions.player_actions import deselect_player, select_player, confirm_delete, delete_player, \
-    select_all_players, add_new_player
-from bot.handlers.actions.round_actions import set_score, set_draw, result_team
-from bot.handlers.actions.tournament_actions import set_round_points, finalize_tournament, begin_tournament_setup, \
-    create_tournament
-from bot.ui.views import show_player_selection
+from bot.handlers.actions.management_actions import (
+    add_to_team1,
+    add_to_team2,
+    back_to_standings,
+    cancel_manual_pair,
+    confirm_manual_pair,
+    edit_round,
+    edit_rounds,
+    management,
+    regenerate_auto,
+    regenerate_manual,
+    remove_from_team,
+    reset_manual_pair,
+    set_draw_round,
+    set_winner_team,
+)
+from bot.handlers.actions.player_actions import (
+    add_new_player,
+    confirm_delete,
+    delete_player,
+    deselect_player,
+    select_all_players,
+    select_player,
+)
+from bot.handlers.actions.round_actions import result_team, set_draw, set_score
+from bot.handlers.actions.tournament_actions import (
+    begin_tournament_setup,
+    create_tournament,
+    finalize_tournament,
+    set_round_points,
+)
 from bot.state import chat_tournaments
+from bot.ui.views import show_player_selection
 
 
 async def handle_callback(update, context):

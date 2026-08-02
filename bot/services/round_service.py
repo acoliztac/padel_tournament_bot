@@ -1,6 +1,6 @@
 from bot.state import pending_scores
-from bot.utils.score_helpers import apply_win, apply_draw, rollback_match, rollback_match_result
-from bot.utils.telegram_helpers import safe_edit_message_reply_markup, safe_delete_score_message
+from bot.utils.score_helpers import apply_draw, apply_win, rollback_match, rollback_match_result
+from bot.utils.telegram_helpers import safe_delete_score_message, safe_edit_message_reply_markup
 from bot.utils.tournaments_helpers import get_tournament
 
 

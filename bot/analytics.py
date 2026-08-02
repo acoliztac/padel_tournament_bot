@@ -1,8 +1,7 @@
 from collections import defaultdict
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from bot.tournament import Tournament
+from bot.tournament import Tournament
+
 
 def calculate_fair_table(tournament: Tournament) -> list:
     """
@@ -119,13 +118,15 @@ def calculate_fun_table(tournament: Tournament) -> list:
 
     # Create result list with average fun score per game
     fun_stats = []
-    for name in player_fun.keys():
-        avg_fun = player_fun[name] / player_games[name] if player_games[name] > 0 else 0
+    for name, total_fun in player_fun.items():
+        games = player_games[name]
+        avg_fun = total_fun / games if games > 0 else 0
+
         fun_stats.append({
             "player": name,
             "fun_score": round(avg_fun, 2),
-            "total_fun": player_fun[name],
-            "games": player_games[name]
+            "total_fun": total_fun,
+            "games": games
         })
 
     # Sort by average fun_score descending, then by player name for deterministic ordering
@@ -221,14 +222,14 @@ def calculate_best_worst_partners(tournament):
     # -------------------------
     result = {}
 
-    for player in partners.keys():
+    for player, player_partners in partners.items():
 
         # 🤝 best partner
         best_partner = None
         best_avg = None
         partners_summary = {}
 
-        for pr, vals in partners[player].items():
+        for pr, vals in player_partners.items():
             avg = sum(vals) / len(vals)
 
             partners_summary[pr] = {

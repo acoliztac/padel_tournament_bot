@@ -1,9 +1,9 @@
 import pytest
 
+from bot import state
+from bot.services import round_service
 from bot.tournament import Player, Tournament
 from bot.utils import score_helpers
-from bot.services import round_service
-from bot import state
 
 
 @pytest.fixture

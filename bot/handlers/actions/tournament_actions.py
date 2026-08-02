@@ -1,12 +1,28 @@
-from bot.services.tournament_service import create_tournament_service, select_next_pair_service, \
-    finalize_tournament_service, set_round_points_service
-from bot.state import pending_player_selection, chat_tournaments
-from bot.ui.views import build_final_report
-from bot.ui.views import show_standings, show_points_selection, show_tournament_mode, show_player_selection, \
-    delete_score_message, show_final_report, show_new_tournament_button
-from bot.utils.telegram_helpers import safe_delete_message, safe_remove_buttons_from_standings_message, \
-    safe_delete_points_selection_message, safe_delete_round_message, \
-    safe_delete_tournament_mode_message, safe_delete_player_selection_message
+from bot.services.tournament_service import (
+    create_tournament_service,
+    finalize_tournament_service,
+    select_next_pair_service,
+    set_round_points_service,
+)
+from bot.state import chat_tournaments, pending_player_selection
+from bot.ui.views import (
+    build_final_report,
+    delete_score_message,
+    show_final_report,
+    show_new_tournament_button,
+    show_player_selection,
+    show_points_selection,
+    show_standings,
+    show_tournament_mode,
+)
+from bot.utils.telegram_helpers import (
+    safe_delete_message,
+    safe_delete_player_selection_message,
+    safe_delete_points_selection_message,
+    safe_delete_round_message,
+    safe_delete_tournament_mode_message,
+    safe_remove_buttons_from_standings_message,
+)
 
 
 async def create_tournament(chat_id, context):

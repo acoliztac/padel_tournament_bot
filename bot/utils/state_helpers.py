@@ -1,4 +1,4 @@
-from bot.state import pending_edit_selection, pending_manual_pair, pending_management, pending_scores
+from bot.state import pending_edit_selection, pending_management, pending_manual_pair, pending_scores
 
 
 def clear_management_state(chat_id):

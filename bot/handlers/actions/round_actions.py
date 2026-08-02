@@ -1,6 +1,6 @@
 from bot.handlers.actions.tournament_actions import next_pair
 from bot.services.round_service import apply_result, apply_result_team
-from bot.ui.views import show_standings, show_score_buttons
+from bot.ui.views import show_score_buttons, show_standings
 
 
 async def set_score(chat_id, data, context):

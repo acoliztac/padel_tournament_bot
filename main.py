@@ -2,15 +2,8 @@ import logging
 import os
 
 from dotenv import load_dotenv
-from telegram import Update, ForceReply
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    ContextTypes,
-    CallbackQueryHandler,
-    MessageHandler,
-    filters
-)
+from telegram import ForceReply, Update
+from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
 from bot.handlers.callbacks import handle_callback
 from bot.handlers.errors import error_handler

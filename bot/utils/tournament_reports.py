@@ -1,5 +1,10 @@
-from bot.analytics import calculate_best_worst_partners, calculate_tense_matches, calculate_fun_table, \
-    calculate_fair_table, get_raw_match_table
+from bot.analytics import (
+    calculate_best_worst_partners,
+    calculate_fair_table,
+    calculate_fun_table,
+    calculate_tense_matches,
+    get_raw_match_table,
+)
 
 
 def add_final_table(max_name_len: int, msg: str, t) -> str:

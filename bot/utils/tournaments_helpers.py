@@ -1,4 +1,4 @@
-from bot.state import tournaments, chat_tournaments
+from bot.state import chat_tournaments, tournaments
 
 
 def get_tournament(chat_id):

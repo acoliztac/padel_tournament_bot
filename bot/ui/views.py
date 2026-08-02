@@ -1,16 +1,37 @@
 import asyncio
 
-from telegram.error import RetryAfter
+from telegram.error import RetryAfter, TelegramError
 
-from bot.state import chat_tournaments, anti_spam_msg_ids, pending_scores, pending_manual_pair, pending_edit_selection, \
-    players_pool, pending_player_selection, pending_management
-from bot.ui.keyboards import player_selection_keyboard, score_keyboard, tournament_mode_keyboard, \
-    points_selection_keyboard, management_keyboard, edit_rounds_keyboard, manual_pair_keyboard, round_result_keyboard, \
-    begin_tournament_setup_keyboard
+from bot.state import (
+    anti_spam_msg_ids,
+    chat_tournaments,
+    pending_edit_selection,
+    pending_management,
+    pending_manual_pair,
+    pending_player_selection,
+    pending_scores,
+    players_pool,
+)
+from bot.ui.keyboards import (
+    begin_tournament_setup_keyboard,
+    edit_rounds_keyboard,
+    management_keyboard,
+    manual_pair_keyboard,
+    player_selection_keyboard,
+    points_selection_keyboard,
+    round_result_keyboard,
+    score_keyboard,
+    tournament_mode_keyboard,
+)
 from bot.utils.telegram_helpers import safe_delete_message, safe_edit_message_text
-from bot.utils.tournament_reports import add_final_table, add_raw_match_table, add_best_worst_partners_table, \
-    add_fun_table, add_tense_matches_table, add_fair_table
-
+from bot.utils.tournament_reports import (
+    add_best_worst_partners_table,
+    add_fair_table,
+    add_final_table,
+    add_fun_table,
+    add_raw_match_table,
+    add_tense_matches_table,
+)
 from bot.utils.tournaments_helpers import get_tournament
 
 
@@ -87,24 +108,20 @@ async def show_standings(chat_id, context):
 
     if chat_id in pending_edit_selection:
         keyboard = edit_rounds_keyboard(t.round_history)
-        try:
-            await safe_edit_message_text(bot=context.bot, chat_id=chat_id, message_id=t.stats_msg_id, text=msg,
-                                         parse_mode="HTML",
-                                         reply_markup=keyboard)
-        except:
-            sent = await context.bot.send_message(chat_id, msg, parse_mode="HTML",
-                                                  reply_markup=keyboard)
+
+        edited = await safe_edit_message_text(bot=context.bot, chat_id=chat_id, message_id=t.stats_msg_id, text=msg,
+                                              parse_mode="HTML", reply_markup=keyboard)
+        if not edited:
+            sent = await context.bot.send_message(chat_id, msg, parse_mode="HTML", reply_markup=keyboard)
             t.stats_msg_id = sent.message_id
         return  # Не показывать обычные standings
 
     if chat_id in pending_management:
         keyboard = management_keyboard(bool(t.round_history))
-        try:
-            await context.bot.edit_message_text(chat_id=chat_id, message_id=t.stats_msg_id, text=msg, parse_mode="HTML",
-                                                reply_markup=keyboard)
-        except:
-            sent = await context.bot.send_message(chat_id, msg, parse_mode="HTML",
-                                                  reply_markup=keyboard)
+        edited = await safe_edit_message_text(chat_id=chat_id, message_id=t.stats_msg_id, text=msg, parse_mode="HTML",
+                                              reply_markup=keyboard)
+        if not edited:
+            sent = await context.bot.send_message(chat_id, msg, parse_mode="HTML", reply_markup=keyboard)
             t.stats_msg_id = sent.message_id
         return  # Не показывать обычные standings
 
@@ -118,10 +135,9 @@ async def show_standings(chat_id, context):
         msg += "Выберите игроков:"
 
         keyboard = manual_pair_keyboard(players=t.players, team1=team1, team2=team2)
-        try:
-            await context.bot.edit_message_text(chat_id=chat_id, message_id=t.stats_msg_id, text=msg, parse_mode="HTML",
-                                                reply_markup=keyboard)
-        except:
+        edited = await safe_edit_message_text(chat_id=chat_id, message_id=t.stats_msg_id, text=msg, parse_mode="HTML",
+                                              reply_markup=keyboard)
+        if not edited:
             sent = await context.bot.send_message(chat_id, msg, parse_mode="HTML", reply_markup=keyboard)
             t.stats_msg_id = sent.message_id
         return  # Не показывать обычные standings
@@ -131,15 +147,16 @@ async def show_standings(chat_id, context):
             await context.bot.edit_message_text(chat_id=chat_id, message_id=t.stats_msg_id, text=msg, parse_mode="HTML",
                                                 reply_markup=keyboard if keyboard else None)
         except RetryAfter as e:
+
             try:
                 sent = await context.bot.send_message(chat_id, f"Антиспам сработал, ждем {e.retry_after} секунд...")
                 anti_spam_msg_ids[chat_id] = sent.message_id
-            except:
+            except TelegramError:
                 pass
             await asyncio.sleep(e.retry_after)
             await safe_edit_message_text(bot=context.bot, chat_id=chat_id, message_id=t.stats_msg_id, text=msg,
                                          parse_mode="HTML", reply_markup=keyboard if keyboard else None)
-        except:
+        except TelegramError:
             await safe_delete_message(context.bot, chat_id, t.stats_msg_id)
             try:
                 sent = await context.bot.send_message(chat_id, msg, parse_mode="HTML",
@@ -196,7 +213,7 @@ async def show_score_buttons(chat_id, context, winner_team):
         try:
             sent_anti = await context.bot.send_message(chat_id, f"Антиспам сработал, ждем {e.retry_after} секунд...")
             anti_spam_msg_ids[chat_id] = sent_anti.message_id
-        except:
+        except TelegramError:
             pass
         await asyncio.sleep(e.retry_after)
         sent = await context.bot.send_message(chat_id, msg_text, reply_markup=keyboard)
@@ -237,7 +254,7 @@ async def show_final_report(chat_id, context, text, message_id=None):
         except RetryAfter as e:
             await asyncio.sleep(e.retry_after)
             await safe_edit_message_text(context.bot, chat_id, message_id, text, parse_mode="HTML")
-        except:
+        except TelegramError:
             pass  # If edit fails, just proceed
     else:
         try:
@@ -256,7 +273,7 @@ async def show_new_tournament_button(chat_id, context):
         try:
             sent_anti = await context.bot.send_message(chat_id, f"Антиспам сработал, ждем {e.retry_after} секунд...")
             anti_spam_msg_ids[chat_id] = sent_anti.message_id
-        except:
+        except TelegramError:
             pass
 
         await asyncio.sleep(e.retry_after)

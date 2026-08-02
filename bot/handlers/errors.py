@@ -2,7 +2,6 @@ import logging
 
 from telegram.error import RetryAfter
 
-
 logger = logging.getLogger(__name__)
 
 

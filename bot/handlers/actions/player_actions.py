@@ -1,7 +1,7 @@
 from telegram import ForceReply
 
+from bot.state import pending_new_player, pending_player_selection, players_pool
 from bot.ui.views import show_player_selection
-from bot.state import pending_player_selection, players_pool, pending_new_player
 
 
 async def add_new_player(chat_id, context):

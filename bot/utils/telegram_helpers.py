@@ -1,3 +1,5 @@
+from telegram.error import TelegramError
+
 from bot.state import chat_tournaments, pending_scores
 
 
@@ -7,7 +9,7 @@ async def safe_delete_message(bot, chat_id, message_id):
             chat_id=chat_id,
             message_id=message_id
         )
-    except:
+    except TelegramError:
         pass
 
 
@@ -18,7 +20,7 @@ async def safe_edit_message_reply_markup(bot, chat_id, message_id, reply_markup=
             message_id=message_id,
             reply_markup=reply_markup
         )
-    except:
+    except TelegramError:
         pass
 
 
@@ -32,7 +34,7 @@ async def safe_edit_message_text(bot, chat_id, message_id, text, reply_markup=No
             parse_mode=parse_mode
         )
         return True
-    except:
+    except TelegramError:
         return False
 
 

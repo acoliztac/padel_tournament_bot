@@ -1,7 +1,7 @@
+import random
+import uuid
 from dataclasses import dataclass, field
 from typing import Optional
-import uuid
-import random
 
 
 @dataclass
@@ -23,7 +23,7 @@ class Player:
 class Pair:
     team1: list[Player]
     team2: list[Player]
-    score: Optional[str] = None
+    score: str | None = None
 
 
 @dataclass
@@ -33,8 +33,8 @@ class Tournament:
     players: list[Player] = field(default_factory=list)
     current_round: int = 1
     round_history: list = field(default_factory=list)
-    stats_msg_id: Optional[int] = None
-    round_points: Optional[int] = None
+    stats_msg_id: int | None = None
+    round_points: int | None = None
 
     def add_player(self, player: Player):
         self.players.append(player)
@@ -47,7 +47,7 @@ class Tournament:
 
         return pair
 
-    def create_manual_pair(self, team1_names: list[str], team2_names: list[str]) -> Optional[Pair]:
+    def create_manual_pair(self, team1_names: list[str], team2_names: list[str]) -> Pair | None:
         if len(team1_names) != 2 or len(team2_names) != 2:
             return None
 
@@ -75,7 +75,7 @@ class Tournament:
         return len(set(after_games)) == 1
 
     # -------------------- Mexicano 1+4 vs 2+3 --------------------
-    def select_next_pair(self) -> Optional[Pair]:
+    def select_next_pair(self) -> Pair | None:
         if len(self.players) < 4:
             return None
 
