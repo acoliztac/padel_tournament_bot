@@ -1,17 +1,14 @@
 from datetime import datetime
-from zoneinfo import ZoneInfo
 
 from bot.state import chat_tournaments, pending_scores, tournaments
 from bot.tournament import Player, Tournament
 from bot.utils.state_helpers import clear_active_round_state, clear_management_state
 from bot.utils.tournaments_helpers import get_tournament
 
-LOCAL_TZ = ZoneInfo("Europe/Vilnius")
-
 
 def create_tournament_service(chat_id, selected):
     # Generate tournament name
-    date_str = datetime.now(LOCAL_TZ).strftime("%Y-%m-%d")
+    date_str = datetime.now().strftime("%Y-%m-%d")
     player_count = len(selected)
     name = f"{date_str}_Mexicano_{player_count}players"
 
