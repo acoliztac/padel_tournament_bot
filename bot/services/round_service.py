@@ -1,5 +1,4 @@
 from bot.state import pending_scores
-from bot.tournament import Pair
 from bot.utils.score_helpers import apply_win, apply_draw, rollback_match, rollback_match_result
 from bot.utils.telegram_helpers import safe_edit_message_reply_markup, safe_delete_score_message
 from bot.utils.tournaments_helpers import get_tournament
@@ -23,9 +22,9 @@ def prepare_round_edit(chat_id, round_num):
             team1 = [players_by_name[name] for name in team1_names]
             team2 = [players_by_name[name] for name in team2_names]
         except KeyError:
-            return None
+            return False
 
-        rollback_match(team1, team2, score1, score2, )
+        rollback_match(team1, team2, score1, score2)
 
         pair = tournament.create_pair(team1, team2)
 
@@ -36,7 +35,7 @@ def prepare_round_edit(chat_id, round_num):
             "edit_round": round_num,
         }
 
-    return None
+    return True
 
 
 async def apply_result(chat_id, context, score):

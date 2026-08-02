@@ -2,7 +2,7 @@ from bot.handlers.actions.tournament_actions import next_pair
 from bot.services.round_service import prepare_round_edit, set_round_draw_service, prepare_round_winner_change
 from bot.state import pending_management, pending_edit_selection, pending_scores, pending_manual_pair
 from bot.ui.views import show_standings, show_score_buttons
-from bot.utils.state_helpers import clear_management_state, clear_active_round_state
+from bot.utils.state_helpers import clear_management_state
 from bot.utils.tournaments_helpers import get_tournament
 
 
@@ -90,11 +90,13 @@ async def edit_rounds(chat_id, context):
 async def edit_round(chat_id, context, data):
     round_num = int(data.split('_')[2])
 
-    pending_data = prepare_round_edit(chat_id, round_num)
+    success = prepare_round_edit(chat_id, round_num)
 
-    if pending_data is None:
+    if success is None:
         await context.bot.send_message(chat_id, "Не удалось найти раунд для редактирования.")
         return
+
+    await show_standings(chat_id, context)
 
 
 async def set_draw_round(chat_id, context, data):
@@ -106,7 +108,7 @@ async def set_draw_round(chat_id, context, data):
         await context.bot.send_message(chat_id, "Не удалось изменить результат раунда.")
         return
 
-    await show_standings(chat_id, context, )
+    await show_standings(chat_id, context)
 
 
 async def set_winner_team(chat_id, context, data):
